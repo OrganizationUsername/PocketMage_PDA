@@ -7,7 +7,6 @@
 
 #include <pocketmage.h>
 
-
 // Initialization of bz class
 static PocketmageBZ pm_bz;
 /*
@@ -34,8 +33,7 @@ const ledc_channel_config_t ledc_channel = {
 };
 
 */
-PocketmageBZ::PocketmageBZ()
-  : buzzer_(BZ_PIN) {}
+PocketmageBZ::PocketmageBZ() : buzzer_(BZ_PIN) {}
 
 bool PocketmageBZ::begin(int channel) {
   channel_ = channel;
@@ -45,21 +43,24 @@ bool PocketmageBZ::begin(int channel) {
 }
 
 void PocketmageBZ::end() {
-  if (!begun_) return;
+  if (!begun_)
+    return;
   buzzer_.end(channel_);
   begun_ = false;
 }
 
 // Setup for Buzzer Class
 void setupBZ() {
-  //ledc_timer_config(&ledc_timer);
-  //ledc_channel_config(&ledc_channel);
+  // ledc_timer_config(&ledc_timer);
+  // ledc_channel_config(&ledc_channel);
   auto& bz = BZ();
   bz.begin();
 }
 
 // Access for other apps
-PocketmageBZ& BZ() { return pm_bz; }
+PocketmageBZ& BZ() {
+  return pm_bz;
+}
 
 // ===================== main functions =====================
 void PocketmageBZ::playJingle(const Jingle& jingle) {
@@ -75,7 +76,7 @@ void PocketmageBZ::playJingle(const Jingle& jingle) {
     buzzer_.sound(jingle.notes[i].key, jingle.notes[i].duration);
   }
 
-  buzzer_.sound(0, 80);  // End the sound
-  buzzer_.end(channel_);        // Stop the buzzer
+  buzzer_.sound(0, 80);   // End the sound
+  buzzer_.end(channel_);  // Stop the buzzer
   begun_ = false;
 }

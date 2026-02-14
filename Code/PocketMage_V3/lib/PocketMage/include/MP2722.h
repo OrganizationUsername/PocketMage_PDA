@@ -5,7 +5,7 @@
 #include <config.h>
 
 class MP2722 {
-public:
+ public:
   explicit MP2722(TwoWire& wirePort = Wire);
 
   bool begin();
@@ -24,32 +24,32 @@ public:
   };
 
   struct DPDMResult {
-      uint8_t code;
-      const char* description;
-      float currentLimitA;
+    uint8_t code;
+    const char* description;
+    float currentLimitA;
   };
 
   // Register-level access
   bool writeReg(uint8_t reg, uint8_t value);
-  bool readReg(uint8_t reg, uint8_t &value);
+  bool readReg(uint8_t reg, uint8_t& value);
 
   // Helper functions
   bool init(uint8_t sda, uint8_t scl);
   void printDiagnostics();
   bool setCCMode(uint8_t cc_cfg);
   bool setBoostCurrentLimit(float amps);
-  bool getDPDMStatus(MP2722_DPDMStatus &out);
-  bool getChargeStatus(MP2722_ChargeStatus &out);
-  bool isBatteryLow(bool &low);
+  bool getDPDMStatus(MP2722_DPDMStatus& out);
+  bool getChargeStatus(MP2722_ChargeStatus& out);
+  bool isBatteryLow(bool& low);
   bool setBoost(bool enable);
-  bool getBoostState(bool &enabled);
-  bool getDPDMStatus(DPDMResult &out);
-  bool getOTGNeed(bool &boostNeeded);
+  bool getBoostState(bool& enabled);
+  bool getDPDMStatus(DPDMResult& out);
+  bool getOTGNeed(bool& boostNeeded);
 
   void setUSBControlESP();
   void setUSBControlBMS();
 
-private:
+ private:
   TwoWire* _wire;
 };
 

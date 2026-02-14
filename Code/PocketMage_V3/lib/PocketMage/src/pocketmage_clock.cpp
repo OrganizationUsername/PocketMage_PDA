@@ -11,13 +11,14 @@ static constexpr const char* TAG = "CLOCK";
 
 RTC_PCF8563 rtc;
 
-const char daysOfTheWeek[7][12] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+const char daysOfTheWeek[7][12] = {"Sunday",   "Monday", "Tuesday", "Wednesday",
+                                   "Thursday", "Friday", "Saturday"};
 
 // Initialization of clock class
 static PocketmageCLOCK pm_clock(rtc);
 
 // Setup for Clock Class
-void setupClock(){
+void setupClock() {
   pinMode(RTC_INT, INPUT);
   if (!CLOCK().begin()) {
     ESP_LOGE(TAG, "Couldn't find RTC");
@@ -33,15 +34,18 @@ void setupClock(){
 
 // Wire function  for Clock class
 // add any global references here + add set function to class header file
-void wireClock(){
-    
-}
+void wireClock() {}
 
 // Access for other apps
-PocketmageCLOCK& CLOCK() { return pm_clock; }
+PocketmageCLOCK& CLOCK() {
+  return pm_clock;
+}
 
 bool PocketmageCLOCK::begin() {
-  if (!rtc_.begin()) { begun_ = false; return false; }
+  if (!rtc_.begin()) {
+    begun_ = false;
+    return false;
+  }
   begun_ = true;
   return true;
 }
@@ -135,9 +139,10 @@ void PocketmageCLOCK::setTimeFromString(String timeStr) {
 }
 
 bool PocketmageCLOCK::isValid() {
-  if (!begun_) return false;
+  if (!begun_)
+    return false;
   DateTime t = rtc_.now();
-  const bool saneYear = t.year() >= 2020 && t.year() < 2099;  // check for reasonable year for DateTime t
+  const bool saneYear =
+      t.year() >= 2020 && t.year() < 2099;  // check for reasonable year for DateTime t
   return saneYear;
 }
-

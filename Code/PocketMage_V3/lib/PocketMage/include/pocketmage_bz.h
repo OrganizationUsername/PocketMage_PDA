@@ -11,9 +11,7 @@
 #include <driver/ledc.h>
 
 #define PWM_CHANNEL LEDC_CHANNEL_1
-#define PWM_RESOLUTION LEDC_TIMER_10_BIT // 10-bit resolution (0-1023)
-
-
+#define PWM_RESOLUTION LEDC_TIMER_10_BIT  // 10-bit resolution (0-1023)
 
 // To Do: copy instructions to readme
 /* ADDING NEW JINGLES

@@ -1,4 +1,5 @@
 // Pocketmage library headers
+// clang-format off
 #include <pocketmage_eink.h>
 #include <pocketmage_oled.h>
 #include <pocketmage_sd.h>
@@ -13,3 +14,4 @@
 #include <config.h>
 #include <libAssets.h>
 #include <Preferences.h>
+// clang-format on
