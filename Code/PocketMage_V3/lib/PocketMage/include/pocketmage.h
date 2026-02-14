@@ -4,6 +4,7 @@
 #include <pocketmage_sd.h>
 #include <pocketmage_kb.h>
 #include <pocketmage_bz.h>
+#include <pocketmage_wifi.h>
 #include <pocketmage_touch.h>
 #include <pocketmage_clock.h>
 #include <pocketmage_sys.h>
