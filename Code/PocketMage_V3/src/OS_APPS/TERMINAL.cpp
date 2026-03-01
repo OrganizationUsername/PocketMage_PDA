@@ -1097,7 +1097,7 @@ void compileWrench(const char* wrenchCode) {
   int outLen;
 
   // Compile code
-  WRstr errMsg[256] = {0};
+  WRstr errMsg;
   int err = wr_compile(wrenchCode, strlen(wrenchCode), &outBytes, &outLen, &errMsg);
 
   // Run the code
