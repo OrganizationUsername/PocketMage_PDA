@@ -9,7 +9,7 @@ class PocketmageEink;
 
 extern Adafruit_MPR121 cap;  // Touch slider
 
-// ===================== CAPACATIVE TOUCH CLASS =====================
+// ===================== CAPACITIVE TOUCH CLASS =====================
 class PocketmageTOUCH {
  public:
   explicit PocketmageTOUCH(Adafruit_MPR121& cap) : cap_(cap) {}
