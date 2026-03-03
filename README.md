@@ -21,7 +21,7 @@
 
 [Tutorials](https://github.com/ashtf8/PocketMage_PDA/tree/main/Docs/Tutorials)
 
-[PocketMage Command & Keystroke Manual](https://github.com/ashtf8/PocketMage_PDA/tree/main/Docs/Command%20Manual)
+[PocketMage Command & Keystroke Manual](https://github.com/ashtf8/PocketMage_PDA/tree/main/Docs/Getting%20Started/Command%20Manual)
 
 [3rd Party App Template](https://github.com/ashtf8/PocketMage_PDA/blob/main/Code/PocketMage_V3/src/APP_TEMPLATE.cpp)
 

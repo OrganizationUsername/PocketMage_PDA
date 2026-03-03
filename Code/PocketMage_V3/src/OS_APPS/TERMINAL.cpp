@@ -1106,8 +1106,8 @@ void compileWrench(const char* wrenchCode) {
   }
 
   // Output error message
-  if (errMsg.size() > 0) {
-    const char* p = errMsg.c_str();
+  if (errMsg.c_str() && errMsg[0] != '\0') {
+    const char* p = errMsg;
     const char* lineStart = p;
 
     while (*p) {
