@@ -188,8 +188,10 @@ void processKB_LEXICON() {
     case MENU:
       KB().setKeyboardState(NORMAL);
       command = textPrompt();
-      if (command != "_EXIT_") loadDefinitions(command);
-      else HOME_INIT();
+      if (command != "_EXIT_")
+        loadDefinitions(command);
+      else
+        HOME_INIT();
       break;
 
     case DEF:
@@ -204,7 +206,7 @@ void processKB_LEXICON() {
           loadDefinitions(currentLine);
           currentLine = "";
           cursor_pos = 0;
-        }                                      
+        }
         // SHIFT Recieved
         else if (inchar == 17) {
           if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) {
@@ -230,7 +232,7 @@ void processKB_LEXICON() {
           if (currentLine.length() > 0 && cursor_pos != 0) {
             if (cursor_pos == currentLine.length()) {
               currentLine.remove(currentLine.length() - 1, 1);
-            } else { 
+            } else {
               currentLine.remove(cursor_pos - 1, 1);
             }
             cursor_pos--;
@@ -280,8 +282,8 @@ void processKB_LEXICON() {
           KB().setKeyboardState(NORMAL);
         }
         // FN+LEFT
-        else if (inchar == 12 ) {
-           HOME_INIT();
+        else if (inchar == 12) {
+          HOME_INIT();
         }
         // FN+RIGHT
         else if (inchar == 6) {
@@ -296,9 +298,8 @@ void processKB_LEXICON() {
         // TAB, SHIFT+TAB / FN+TAB, FN+SHIFT+TAB
         else if (inchar == 9 || inchar == 14) {
           KB().setKeyboardState(NORMAL);
-        }
-        else {
-          //split line at cursor_pos
+        } else {
+          // split line at cursor_pos
           if (cursor_pos == 0) {
             currentLine = inchar + currentLine;
           } else if (cursor_pos == currentLine.length()) {
@@ -349,12 +350,12 @@ void einkHandler_LEXICON() {
         display.setTextColor(GxEPD_BLACK);
 
         // Draw Word
-        display.setFont(&FreeSerif12pt7b);
+        display.setFont(&FreeSerif12pt8b);
         display.setCursor(12, 50);
         display.print(defList[definitionIndex].first);
 
         // Draw Definition
-        display.setFont(&FreeSerif9pt7b);
+        display.setFont(&FreeSerif9pt8b);
         display.setCursor(8, 87);
         // ADD WORD WRAP
         display.print(defList[definitionIndex].second);

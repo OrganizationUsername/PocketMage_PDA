@@ -6,34 +6,46 @@
 // dP     dP  88888888P    dP     88888888P  `8888P'  88     88   dP     dP 8888888P  //
 
 #pragma once
-#include <Arduino.h>
 #include <Adafruit_TCA8418.h>
+#include <Arduino.h>
 
 extern Adafruit_TCA8418 keypad;
 
 // ===================== KB CLASS =====================
 class PocketmageKB {
-public:
+ public:
   volatile bool TCA8418_event_ = false;  // Keypad interrupt event
-  explicit PocketmageKB(Adafruit_TCA8418 &kp) : keypad_(kp) {}
+  explicit PocketmageKB(Adafruit_TCA8418& kp) : keypad_(kp) {}
 
   using KbStateFn = std::function<int()>;
 
-  void setKeyboardState(int kbState)                       { kbState_ = kbState;}
-  int getKeyboardState() const                               { return kbState_; }
+  void setKeyboardState(int kbState) {
+    kbState_ = kbState;
+  }
+  int getKeyboardState() const {
+    return kbState_;
+  }
   // Main methods
   char updateKeypress();
   void checkUSBKB();
-  void disableInterrupts()                           { keypad_.disableInterrupts(); }
-  void enableInterrupts()                             { keypad_.enableInterrupts(); }
-  void flush()                                                   { keypad_.flush(); }
-  void setTCA8418Event()                              {      TCA8418_event_ = true; }
+  void disableInterrupts() {
+    keypad_.disableInterrupts();
+  }
+  void enableInterrupts() {
+    keypad_.enableInterrupts();
+  }
+  void flush() {
+    keypad_.flush();
+  }
+  void setTCA8418Event() {
+    TCA8418_event_ = true;
+  }
 
-private:
-  Adafruit_TCA8418      &keypad_; // class reference to hardware keypad object
-  int                   kbState_        = 0;
+ private:
+  Adafruit_TCA8418& keypad_;  // class reference to hardware keypad object
+  int kbState_ = 0;
 
-  volatile int*         prevTimeMillis_ = nullptr;
+  volatile int* prevTimeMillis_ = nullptr;
 };
 
 void wireKB();

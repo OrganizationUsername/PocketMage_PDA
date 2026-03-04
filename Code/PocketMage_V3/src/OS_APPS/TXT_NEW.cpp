@@ -7,45 +7,8 @@
 //      o888o     o888o  o88888o     o888o      //
 
 #include <globals.h>
-#if !OTA_APP // POCKETMAGE_OS
+#if !OTA_APP  // POCKETMAGE_OS
 static constexpr const char* TAG = "TXT_NEWz";
-
-// Font includes
-// Mono
-#include <Fonts/FreeMono9pt8b.h>
-#include <Fonts/FreeMonoBold12pt8b.h>
-#include <Fonts/FreeMonoBold18pt8b.h>
-#include <Fonts/FreeMonoBold24pt8b.h>
-#include <Fonts/FreeMonoBold9pt8b.h>
-#include <Fonts/FreeMonoBoldOblique12pt8b.h>
-#include <Fonts/FreeMonoBoldOblique18pt8b.h>
-#include <Fonts/FreeMonoBoldOblique24pt8b.h>
-#include <Fonts/FreeMonoBoldOblique9pt8b.h>
-#include <Fonts/FreeMonoOblique9pt8b.h>
-
-// Serif
-#include <Fonts/FreeSerif9pt8b.h>
-#include <Fonts/FreeSerifBold12pt8b.h>
-#include <Fonts/FreeSerifBold18pt8b.h>
-#include <Fonts/FreeSerifBold24pt8b.h>
-#include <Fonts/FreeSerifBold9pt8b.h>
-#include <Fonts/FreeSerifBoldItalic12pt8b.h>
-#include <Fonts/FreeSerifBoldItalic18pt8b.h>
-#include <Fonts/FreeSerifBoldItalic24pt8b.h>
-#include <Fonts/FreeSerifBoldItalic9pt8b.h>
-#include <Fonts/FreeSerifItalic9pt8b.h>
-
-// Sans
-#include <Fonts/FreeSans9pt8b.h>
-#include <Fonts/FreeSansBold12pt8b.h>
-#include <Fonts/FreeSansBold18pt8b.h>
-#include <Fonts/FreeSansBold24pt8b.h>
-#include <Fonts/FreeSansBold9pt8b.h>
-#include <Fonts/FreeSansBoldOblique12pt8b.h>
-#include <Fonts/FreeSansBoldOblique18pt8b.h>
-#include <Fonts/FreeSansBoldOblique24pt8b.h>
-#include <Fonts/FreeSansBoldOblique9pt8b.h>
-#include <Fonts/FreeSansOblique9pt8b.h>
 
 #include "esp32-hal-log.h"
 #include "esp_log.h"
@@ -250,9 +213,8 @@ struct DocLine {
 
     if (style == '>' || style == 'C') {
       textWidth -= SPECIAL_PADDING;
-    }
-    else if (style == '-' || style == 'L') {
-      textWidth -= 2*SPECIAL_PADDING;
+    } else if (style == '-' || style == 'L') {
+      textWidth -= 2 * SPECIAL_PADDING;
     }
 
     lines.clear();
@@ -297,8 +259,8 @@ struct DocLine {
   void compileToText() {
     String compiled = "";
 
-    for (auto &ln : lines) {
-      for (auto &w : ln.words) {
+    for (auto& ln : lines) {
+      for (auto& w : ln.words) {
         // Determine formatting markers
         if (w.bold && w.italic)
           compiled += "***";
@@ -351,19 +313,17 @@ struct DocLine {
       return 12;
     }
 
-
     // ---------- Add Padding If Needed ---------- //
 
     // Lists and Blockquotes are padded on the left
     if (style == '>')
       startX += SPECIAL_PADDING;
     else if (style == '-' || style == 'L')
-      startX += 2*SPECIAL_PADDING;
+      startX += 2 * SPECIAL_PADDING;
     // Code blocks are padded on both sides
     else if (style == 'C')
       startX += (SPECIAL_PADDING / 2);
 
-    
     // ---------- Render Text ---------- //
 
     for (auto& ln : lines) {
@@ -573,14 +533,14 @@ struct DocLine {
     }
 
     // Ordered lists get a glyph
-    else if (style == 'L' && (startY+1) > 0) {
-      //u8g2.drawBox(startX - 3, startY, 2, 2);
-      u8g2.drawVLine(startX-3, startY, 2);
-      u8g2.drawPixel(startX-1, startY+1);
+    else if (style == 'L' && (startY + 1) > 0) {
+      // u8g2.drawBox(startX - 3, startY, 2, 2);
+      u8g2.drawVLine(startX - 3, startY, 2);
+      u8g2.drawPixel(startX - 1, startY + 1);
     }
     // Unordered lists get a '-'
     else if (style == '-' && (startY) > 0)
-      u8g2.drawHLine(startX-3, startY, 2);
+      u8g2.drawHLine(startX - 3, startY, 2);
 
     return cursorY - startY;
   }
@@ -681,8 +641,8 @@ void toolBar(wordObject& wordObj) {
                    "FN");
       break;
     case 3:
-      u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth("FN+SHIFT")) / 2, u8g2.getDisplayHeight(),
-                   "FN+SHIFT");
+      u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth("FN+SHIFT")) / 2,
+                   u8g2.getDisplayHeight(), "FN+SHIFT");
     default:
       break;
   }
@@ -1088,8 +1048,9 @@ void loadMarkdownFile(const String& path) {
   docLines.clear();
   File file = global_fs->open(path.c_str(), FILE_READ);
   if (!file) {
-    ESP_LOGE("SD", "File does not exist: %s", path.c_str());  // FIXME: - Come up with better error handling
-                                                              //        - Should this be Error or Warning?
+    ESP_LOGE("SD", "File does not exist: %s",
+             path.c_str());  // FIXME: - Come up with better error handling
+                             //        - Should this be Error or Warning?
     OLED().oledWord("LOAD FAILED - FILE MISSING");
     delay(2000);
 
@@ -1114,27 +1075,28 @@ void loadMarkdownFile(const String& path) {
     String content = line;  // default is full line
 
     if (line.length() == 0) {
-      style = 'B'; // Blank line
+      style = 'B';  // Blank line
       content = "";
     } else if (line.startsWith("### ")) {
-      style = '3'; // Heading 3
+      style = '3';                  // Heading 3
       content = line.substring(4);  // remove "### "
     } else if (line.startsWith("## ")) {
-      style = '2'; // Heading 2
+      style = '2';                  // Heading 2
       content = line.substring(3);  // remove "## "
     } else if (line.startsWith("# ")) {
-      style = '1'; // Heading 1
+      style = '1';                  // Heading 1
       content = line.substring(2);  // remove "# "
     } else if (line.startsWith("> ")) {
-      style = '>'; // Quote Block
+      style = '>';                  // Quote Block
       content = line.substring(2);  // remove "> "
     } else if (line.startsWith("- ")) {
-      style = '-'; // Unordered List
-      content = line.substring(2); // remove "- "
+      style = '-';                  // Unordered List
+      content = line.substring(2);  // remove "- "
     } else if (line == "---") {
-      style = 'H'; // Horizontal Rule
+      style = 'H';      // Horizontal Rule
       content = "---";  // horizontal line has no content
-    } else if ((line.startsWith("```")) || (line.startsWith("`") && line.endsWith("`")) || (line.startsWith("```") && line.endsWith("```"))) {
+    } else if ((line.startsWith("```")) || (line.startsWith("`") && line.endsWith("`")) ||
+               (line.startsWith("```") && line.endsWith("```"))) {
       if (line.startsWith("```"))
         content = line.substring(3);
       else if (line.startsWith("```") && line.endsWith("```"))
@@ -1142,11 +1104,11 @@ void loadMarkdownFile(const String& path) {
       else if (line.startsWith("`") && line.endsWith("`"))
         content = line.substring(1, line.length() - 1);
 
-      style = 'C'; // Code Block
+      style = 'C';  // Code Block
     } else if (line.length() > 2 && isDigit(line.charAt(0)) && line.charAt(1) == '.' &&
                line.charAt(2) == ' ') {
-      style = 'L'; // Ordered List
-      content = line.substring(3); // remove "1. ", "2. ", etc.
+      style = 'L';                  // Ordered List
+      content = line.substring(3);  // remove "1. ", "2. ", etc.
     }
 
     docLines.push_back({style, content, {}});
@@ -1204,22 +1166,42 @@ void saveMarkdownFile(const String& path) {
   }
 
   // Write each DocLine as Markdown
-  for (auto &dl : docLines) {
+  for (auto& dl : docLines) {
     dl.compileToText();
 
     String out;
 
     switch (dl.style) {
-      case '1': out = "# " + dl.line; break;
-      case '2': out = "## " + dl.line; break;
-      case '3': out = "### " + dl.line; break;
-      case '>': out = "> " + dl.line; break;
-      case '-': out = "- " + dl.line; break;
-      case 'L': out = "1. " + dl.line; break; //String(dl.orderedListNumber) + ". " + dl.line; break;
-      case 'H': out = "---"; break;
-      case 'C': out = "```" + dl.line + "```"; break;
-      case 'B': out = ""; break;
-      default:  out = dl.line; break;
+      case '1':
+        out = "# " + dl.line;
+        break;
+      case '2':
+        out = "## " + dl.line;
+        break;
+      case '3':
+        out = "### " + dl.line;
+        break;
+      case '>':
+        out = "> " + dl.line;
+        break;
+      case '-':
+        out = "- " + dl.line;
+        break;
+      case 'L':
+        out = "1. " + dl.line;
+        break;  // String(dl.orderedListNumber) + ". " + dl.line; break;
+      case 'H':
+        out = "---";
+        break;
+      case 'C':
+        out = "```" + dl.line + "```";
+        break;
+      case 'B':
+        out = "";
+        break;
+      default:
+        out = dl.line;
+        break;
     }
 
     file.println(out);
@@ -1284,7 +1266,6 @@ void newMarkdownFile(const String& path) {
     setCpuFrequencyMhz(POWER_SAVE_FREQ);
   SDActive = false;
 }
-
 
 // Returns the pixel width of a LineObject (vector of wordObjects)
 int getLineWidth(const LineObject& lineObj, char style) {
@@ -1449,10 +1430,11 @@ void editAppend(char inchar) {
 
     // Retain style on next line for certain styles
     char nextLineStyle = editingDocLine.style;
-    if (nextLineStyle == 'C' || nextLineStyle == '>' || nextLineStyle == '-' || nextLineStyle == 'L') {
-        // keep same style
+    if (nextLineStyle == 'C' || nextLineStyle == '>' || nextLineStyle == '-' ||
+        nextLineStyle == 'L') {
+      // keep same style
     } else {
-        nextLineStyle = 'T'; // fallback to body text
+      nextLineStyle = 'T';  // fallback to body text
     }
 
     // Wrap current word if it doesn't fit
@@ -1589,14 +1571,16 @@ void editAppend(char inchar) {
       CurrentTXTState_NEW = SAVE_AS;
       return;
     }
-    if (!savePath.startsWith("/")) savePath = "/" + savePath;
-    
+    if (!savePath.startsWith("/"))
+      savePath = "/" + savePath;
+
     saveMarkdownFile(savePath);
   }
   // Journal save
   else if (inchar == 6 && CurrentTXTState_NEW == JOURNAL_MODE) {
     String savePath = getCurrentJournal();
-    if (!savePath.startsWith("/")) savePath = "/" + savePath;
+    if (!savePath.startsWith("/"))
+      savePath = "/" + savePath;
     saveMarkdownFile(savePath);
   }
 
@@ -1614,7 +1598,8 @@ void editAppend(char inchar) {
   // Journal load
   else if (inchar == 7 && CurrentTXTState_NEW == JOURNAL_MODE) {
     String outPath = getCurrentJournal();
-    if (!outPath.startsWith("/")) outPath = "/" + outPath;
+    if (!outPath.startsWith("/"))
+      outPath = "/" + outPath;
     loadMarkdownFile(outPath);
   }
 
@@ -1669,7 +1654,8 @@ void editAppend(char inchar) {
       lineScroll = editingDocLine.lines.back().index;
   }
 
-  if (SAVE_POWER) setCpuFrequencyMhz(POWER_SAVE_FREQ);
+  if (SAVE_POWER)
+    setCpuFrequencyMhz(POWER_SAVE_FREQ);
 }
 
 // INIT
@@ -1786,7 +1772,8 @@ void initFonts() {
 void TXT_INIT(String inPath) {
   initFonts();
 
-  if (inPath == "") loadMarkdownFile(PM_SDAUTO().getEditingFile());
+  if (inPath == "")
+    loadMarkdownFile(PM_SDAUTO().getEditingFile());
   else {
     PM_SDAUTO().setEditingFile(inPath);
     loadMarkdownFile(inPath);
@@ -1804,7 +1791,8 @@ void TXT_INIT_JournalMode() {
   initFonts();
 
   String outPath = getCurrentJournal();
-  if (!outPath.startsWith("/")) outPath = "/" + outPath;
+  if (!outPath.startsWith("/"))
+    outPath = "/" + outPath;
   loadMarkdownFile(outPath);
 
   setFontStyle(serif);
@@ -1853,7 +1841,7 @@ void processKB_TXT_NEW() {
         }
       }
       break;
-    case JOURNAL_MODE: // Stripped down version of TXT_ for journal
+    case JOURNAL_MODE:  // Stripped down version of TXT_ for journal
       inchar = KB().updateKeypress();
       if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
         // update scroll
@@ -1874,22 +1862,25 @@ void processKB_TXT_NEW() {
       inchar = KB().updateKeypress();
       if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
         // HANDLE INPUTS
-        //No char recieved
-        if (inchar == 0);   
-        //CR Recieved
-        else if (inchar == 13) {                          
+        // No char recieved
+        if (inchar == 0)
+          ;
+        // CR Recieved
+        else if (inchar == 13) {
           if (currentLine != "" && currentLine != "-") {
-            if (!currentLine.startsWith("/notes/")) currentLine = "/notes/" + currentLine;
-            if (!currentLine.endsWith(".txt")) currentLine = currentLine + ".txt";
+            if (!currentLine.startsWith("/notes/"))
+              currentLine = "/notes/" + currentLine;
+            if (!currentLine.endsWith(".txt"))
+              currentLine = currentLine + ".txt";
             saveMarkdownFile(currentLine);
             CurrentTXTState_NEW = TXT_;
           } else {
             OLED().oledWord("Invalid Name");
             delay(2000);
           }
-          
+
           currentLine = "";
-        }                                      
+        }
         // SHIFT Recieved
         else if (inchar == 17) {
           if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) {
@@ -1899,27 +1890,27 @@ void processKB_TXT_NEW() {
           } else {
             KB().setKeyboardState(SHIFT);
           }
-        } 
+        }
         // FN Recieved
         else if (inchar == 18) {
           if (KB().getKeyboardState() == FUNC || KB().getKeyboardState() == FN_SHIFT) {
-            KB().setKeyboardState(NORMAL); 
+            KB().setKeyboardState(NORMAL);
           } else if (KB().getKeyboardState() == SHIFT) {
             KB().setKeyboardState(FN_SHIFT);
           } else {
             KB().setKeyboardState(FUNC);
-          }   
+          }
         }
-        //Space Recieved
-        else if (inchar == 32) {                                  
+        // Space Recieved
+        else if (inchar == 32) {
           // Spaces not allowed in filenames
         }
-        //ESC / CLEAR Recieved
-        else if (inchar == 20) {                                  
+        // ESC / CLEAR Recieved
+        else if (inchar == 20) {
           currentLine = "";
         }
-        //BKSP Recieved
-        else if (inchar == 8) {                  
+        // BKSP Recieved
+        else if (inchar == 8) {
           if (currentLine.length() > 0) {
             currentLine.remove(currentLine.length() - 1);
           }
@@ -1927,18 +1918,18 @@ void processKB_TXT_NEW() {
         // Home recieved
         else if (inchar == 12) {
           CurrentTXTState_NEW = TXT_;
-        }
-        else {
+        } else {
           currentLine += inchar;
-          if (inchar >= 48 && inchar <= 57) {}  //Only leave FN on if typing numbers
+          if (inchar >= 48 && inchar <= 57) {
+          }  // Only leave FN on if typing numbers
           else if (KB().getKeyboardState() != NORMAL) {
             KB().setKeyboardState(NORMAL);
           }
         }
 
         currentMillis = millis();
-        //Make sure oled only updates at OLED_MAX_FPS
-        if (currentMillis - OLEDFPSMillis >= (1000/OLED_MAX_FPS)) {
+        // Make sure oled only updates at OLED_MAX_FPS
+        if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
           OLEDFPSMillis = currentMillis;
           OLED().oledLine(currentLine, currentLine.length(), false, "Input Filename");
         }
@@ -1948,42 +1939,49 @@ void processKB_TXT_NEW() {
       inchar = KB().updateKeypress();
       if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
         // HANDLE INPUTS
-        //No char recieved
-        if (inchar == 0);   
-        //CR Recieved
-        else if (inchar == 13) {                          
+        // No char recieved
+        if (inchar == 0)
+          ;
+        // CR Recieved
+        else if (inchar == 13) {
           if (currentLine != "" && currentLine != "-") {
-            if (!currentLine.startsWith("/notes/")) currentLine = "/notes/" + currentLine;
-            if (!currentLine.endsWith(".txt")) currentLine = currentLine + ".txt";
+            if (!currentLine.startsWith("/notes/"))
+              currentLine = "/notes/" + currentLine;
+            if (!currentLine.endsWith(".txt"))
+              currentLine = currentLine + ".txt";
             newMarkdownFile(currentLine);
             CurrentTXTState_NEW = TXT_;
           } else {
             OLED().oledWord("Invalid Name");
             delay(2000);
           }
-          
+
           currentLine = "";
-        }                                      
-        //SHIFT Recieved
-        else if (inchar == 17) {                                  
-          if (KB().getKeyboardState() == SHIFT) KB().setKeyboardState(NORMAL);
-          else KB().setKeyboardState(SHIFT);
         }
-        //FN Recieved
-        else if (inchar == 18) {                                  
-          if (KB().getKeyboardState() == FUNC) KB().setKeyboardState(NORMAL);
-          else KB().setKeyboardState(FUNC);
+        // SHIFT Recieved
+        else if (inchar == 17) {
+          if (KB().getKeyboardState() == SHIFT)
+            KB().setKeyboardState(NORMAL);
+          else
+            KB().setKeyboardState(SHIFT);
         }
-        //Space Recieved
-        else if (inchar == 32) {                                  
+        // FN Recieved
+        else if (inchar == 18) {
+          if (KB().getKeyboardState() == FUNC)
+            KB().setKeyboardState(NORMAL);
+          else
+            KB().setKeyboardState(FUNC);
+        }
+        // Space Recieved
+        else if (inchar == 32) {
           // Spaces not allowed in filenames
         }
-        //ESC / CLEAR Recieved
-        else if (inchar == 20) {                                  
+        // ESC / CLEAR Recieved
+        else if (inchar == 20) {
           currentLine = "";
         }
-        //BKSP Recieved
-        else if (inchar == 8) {                  
+        // BKSP Recieved
+        else if (inchar == 8) {
           if (currentLine.length() > 0) {
             currentLine.remove(currentLine.length() - 1);
           }
@@ -1991,18 +1989,18 @@ void processKB_TXT_NEW() {
         // Home recieved
         else if (inchar == 12) {
           CurrentTXTState_NEW = TXT_;
-        }
-        else {
+        } else {
           currentLine += inchar;
-          if (inchar >= 48 && inchar <= 57) {}  //Only leave FN on if typing numbers
+          if (inchar >= 48 && inchar <= 57) {
+          }  // Only leave FN on if typing numbers
           else if (KB().getKeyboardState() != NORMAL) {
             KB().setKeyboardState(NORMAL);
           }
         }
 
         currentMillis = millis();
-        //Make sure oled only updates at OLED_MAX_FPS
-        if (currentMillis - OLEDFPSMillis >= (1000/OLED_MAX_FPS)) {
+        // Make sure oled only updates at OLED_MAX_FPS
+        if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
           OLEDFPSMillis = currentMillis;
           OLED().oledLine(currentLine, currentLine.length(), false, "Input Name for New File");
         }
@@ -2013,13 +2011,13 @@ void processKB_TXT_NEW() {
       if (outPath == "_EXIT_") {
         // Return to TXT
         CurrentTXTState_NEW = TXT_;
-        //newState = true;
+        // newState = true;
         break;
-      }
-      else if (outPath != "") {
+      } else if (outPath != "") {
         // Ensure file is a .txt or .md
         if (outPath.endsWith(".txt") || outPath.endsWith(".md")) {
-          if (!outPath.startsWith("/")) outPath = "/" + outPath;
+          if (!outPath.startsWith("/"))
+            outPath = "/" + outPath;
           loadMarkdownFile(outPath);
           PM_SDAUTO().setEditingFile(outPath);
           CurrentTXTState_NEW = TXT_;
