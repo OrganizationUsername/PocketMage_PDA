@@ -441,13 +441,18 @@ int getLineWidthOLED(Line& line) {
         }
       }
 
-      setFontOLED(false, false);
+      //setFontOLED(false, false);
+      //  Use tiny font for stars
+      u8g2.setFont(u8g2_font_5x7_tf);
     } else
       setFontOLED(bold, italic);
 
     // Count width
     temp[0] = c;
     width += u8g2.getStrWidth(temp);
+
+    // italics need to overlap a bit
+    if (italic && c != '*') width -= 3;
 
     i++;
   }
@@ -456,6 +461,86 @@ int getLineWidthOLED(Line& line) {
 }
 
 // OLED Editor
+void toolBar(Line& line, bool bold, bool italic) {
+  // FN/SHIFT indicator centered
+  u8g2.setFont(u8g2_font_5x7_tf);
+
+  switch (KB().getKeyboardState()) {
+    case 1:
+      u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth("SHIFT")) / 2,
+                   u8g2.getDisplayHeight(), "SHIFT");
+      break;
+    case 2:
+      u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth("FN")) / 2, u8g2.getDisplayHeight(),
+                   "FN");
+      break;
+    case 3:
+      u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth("FN+SHIFT")) / 2,
+                   u8g2.getDisplayHeight(), "FN+SHIFT");
+    default:
+      break;
+  }
+
+  // Show line type
+  char currentDocLineType = line.type;
+  String lineTypeLabel;
+
+  switch (currentDocLineType) {
+    case 'T':
+      lineTypeLabel = "BODY";
+      break;
+    case '1':
+      lineTypeLabel = "H1";
+      break;
+    case '2':
+      lineTypeLabel = "H2";
+      break;
+    case '3':
+      lineTypeLabel = "H3";
+      break;
+    case 'C':
+      lineTypeLabel = "CODE";
+      break;
+    case '>':
+      lineTypeLabel = "QUOTE";
+      break;
+    case '-':
+      lineTypeLabel = "U LIST";
+      break;
+    case 'L':
+      lineTypeLabel = "O LIST";
+      break;
+    case 'H':
+      lineTypeLabel = "H RULE";
+      break;
+    case 'B':
+      lineTypeLabel = "BLANK LINE";
+      break;
+    default:
+      lineTypeLabel = "";
+      break;  // fallback if none match
+  }
+
+  if (lineTypeLabel.length() > 0) {
+    u8g2.drawStr(0, u8g2.getDisplayHeight(), lineTypeLabel.c_str());
+  }
+
+  /*// Bold and italic indicator
+  if (wordObj.bold == true && wordObj.italic == true) {
+    u8g2.drawStr(u8g2.getDisplayWidth() - u8g2.getStrWidth("BOLD+ITALIC"), u8g2.getDisplayHeight(),
+                 "BOLD+ITALIC");
+  } else if (wordObj.bold == true && wordObj.italic == false) {
+    u8g2.drawStr(u8g2.getDisplayWidth() - u8g2.getStrWidth("BOLD"), u8g2.getDisplayHeight(),
+                 "BOLD");
+  } else if (wordObj.bold == false && wordObj.italic == true) {
+    u8g2.drawStr(u8g2.getDisplayWidth() - u8g2.getStrWidth("ITALIC"), u8g2.getDisplayHeight(),
+                 "ITALIC");
+  } else {
+    u8g2.drawStr(u8g2.getDisplayWidth() - u8g2.getStrWidth("NORMAL"), u8g2.getDisplayHeight(),
+                 "NORMAL");
+  }*/
+}
+
 void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
   u8g2.clearBuffer();
 
@@ -483,20 +568,33 @@ void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
 
           // toggle style based on number of stars
           switch (starCount) {
-            case 1: italic = !italic; break;
-            case 2: bold = !bold; break;
-            case 3: bold = !bold; italic = !italic; break;
+            case 1:
+              italic = !italic;
+              break;
+            case 2:
+              bold = !bold;
+              break;
+            case 3:
+              bold = !bold;
+              italic = !italic;
+              break;
           }
         }
-        setFontOLED(false, false);
+        // setFontOLED(false, false);
+        //  Use tiny font for stars
+        u8g2.setFont(u8g2_font_5x7_tf);
       } else {
         setFontOLED(bold, italic);
       }
 
       // Draw text & add width
       temp[0] = c;
-      u8g2.drawStr(xpos, 20, temp);
+      if (c == '*') u8g2.drawStr(xpos, 8, temp);
+      else u8g2.drawStr(xpos, 20, temp);
       xpos += u8g2.getStrWidth(temp);
+
+      // italics need to overlap a bit
+      if (italic && c != '*') xpos -= 3;
 
       // Draw cursor
       if (cursor_pos == i + 1) {
@@ -525,17 +623,29 @@ void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
           while (j + starCount < line.len && line.text[j + starCount] == '*' && starCount < 3)
             starCount++;
           switch (starCount) {
-            case 1: italic = !italic; break;
-            case 2: bold = !bold; break;
-            case 3: bold = !bold; italic = !italic; break;
+            case 1:
+              italic = !italic;
+              break;
+            case 2:
+              bold = !bold;
+              break;
+            case 3:
+              bold = !bold;
+              italic = !italic;
+              break;
           }
         }
-        setFontOLED(false, false);
+        // setFontOLED(false, false);
+        //  Use tiny font for stars
+        u8g2.setFont(u8g2_font_5x7_tf);
       } else {
         setFontOLED(bold, italic);
       }
       temp[0] = c;
       cursor_pixel_offset += u8g2.getStrWidth(temp);
+
+      // italics need to overlap a bit
+      if (italic && c != '*') cursor_pixel_offset -= 3;
     }
 
     // 2. Determine horizontal shift to keep cursor centered
@@ -550,7 +660,7 @@ void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
       if (cursor_pixel_offset > (display_w - 8) / 2) {
         // Shift left
         line_start = ((display_w - 8) / 2) - cursor_pixel_offset;
-        
+
         // Prevent scrolling too far left if the right edge is visible
         if (line_start + total_pixel_width < display_w - 8) {
           line_start = display_w - 8 - total_pixel_width;
@@ -578,12 +688,21 @@ void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
           while (i + starCount < line.len && line.text[i + starCount] == '*' && starCount < 3)
             starCount++;
           switch (starCount) {
-            case 1: italic = !italic; break;
-            case 2: bold = !bold; break;
-            case 3: bold = !bold; italic = !italic; break;
+            case 1:
+              italic = !italic;
+              break;
+            case 2:
+              bold = !bold;
+              break;
+            case 3:
+              bold = !bold;
+              italic = !italic;
+              break;
           }
         }
-        setFontOLED(false, false);
+        // setFontOLED(false, false);
+        //  Use tiny font for stars
+        u8g2.setFont(u8g2_font_5x7_tf);
       } else {
         setFontOLED(bold, italic);
       }
@@ -593,9 +712,13 @@ void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
 
       // Draw character only if it is within screen bounds
       if (xpos + char_w >= 0 && xpos <= display_w) {
-        u8g2.drawStr(xpos, 20, temp);
+        if (c == '*') u8g2.drawStr(xpos, 8, temp);
+        else u8g2.drawStr(xpos, 20, temp);
       }
       xpos += char_w;
+
+      // italics need to overlap a bit
+      if (italic && c != '*') xpos -= 3;
 
       // Draw cursor
       if (cursor_pos == i + 1) {
@@ -649,6 +772,7 @@ void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
       u8g2.setDrawColor(1);
     }
   }
+  */
 
   if (currentlyTyping) {
     // Show toolbar
@@ -657,7 +781,6 @@ void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
     // Show infobar
     OLED().infoBar();
   }
-  */
 
   u8g2.sendBuffer();
 }
@@ -665,6 +788,8 @@ void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
 void editor() {
   static uint16_t cursor_pos = 0;
   static int currentMillis = millis();
+  static long lastInput = millis();
+  bool currentlyTyping = false;
 
   Line& line = document.lines[currentLineNum];
 
@@ -672,9 +797,10 @@ void editor() {
     char inchar = KB().updateKeypress();
 
     // HANDLE INPUTS
+    if (inchar != 0 ) lastInput = millis();
+
     // No char recieved
-    if (inchar == 0)
-      ;
+    if (inchar == 0) ;
 
     // CR Recieved
     else if (inchar == 13) {
@@ -781,11 +907,14 @@ void editor() {
 
     currentMillis = millis();
 
+    if (millis() - lastInput > IDLE_TIME) currentlyTyping = false;
+    else currentlyTyping = true;
+
     // Make sure oled only updates at OLED_MAX_FPS
     if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
       OLEDFPSMillis = currentMillis;
       // OLED().oledLine(line.text, cursor_pos, false);
-      editorOledDisplay(line, cursor_pos, true);
+      editorOledDisplay(line, cursor_pos, currentlyTyping);
     }
   }
 }
