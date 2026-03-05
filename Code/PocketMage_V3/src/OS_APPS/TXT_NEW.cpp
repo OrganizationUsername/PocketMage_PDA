@@ -113,7 +113,7 @@ static bool updateScreen = false;
 static uint16_t currentLineNum = 0;
 static uint16_t topVisibleLine = 0;
 
-#define MAX_LINES 5000   // Max number of lines in document
+#define MAX_LINES 800     // Max number of lines in document
 #define LINE_CAP 64       // Max number of characters in a line
 
 struct Line {
@@ -127,7 +127,7 @@ struct Document {
   ulong lineCount;
 };
 
-Document* document = nullptr;
+Document document;
 
 #pragma region Mrkdn File Ops
 void initLine(Line& line) {
@@ -141,9 +141,9 @@ void saveMarkdownFile(const String& path) {
 
 void loadMarkdownFile(const String& path) {
   // Initialize document
-  document->lineCount = 1;
+  document.lineCount = 1;
   for (ulong i = 0; i < MAX_LINES; i++) {
-    initLine(document->lines[i]);
+    initLine(document.lines[i]);
   }
 
   // Load file
@@ -906,6 +906,8 @@ int drawLineEink(Line& line, int startX, int startY) {
 
   // Fix: Use a for loop so 'continue' doesn't skip the increment
   for (uint16_t i = 0; i < line.len; i++) {
+    if (xpos > display.width()) continue;
+    
     char c = line.text[i];
 
     if (c == '*') {
@@ -944,7 +946,10 @@ int drawLineEink(Line& line, int startX, int startY) {
     // Add character space
     int16_t x1, y1;
     uint16_t charW, charH;
-    display.getTextBounds(temp, 0, 0, &x1, &y1, &charW, &charH);
+    if (c == ' ')
+      display.getTextBounds(SPACEWIDTH_SYMBOL, 0, 0, &x1, &y1, &charW, &charH);
+    else
+      display.getTextBounds(temp, 0, 0, &x1, &y1, &charW, &charH);
     xpos += charW;
 
     // italics need to overlap a bit
@@ -1034,7 +1039,7 @@ void editor() {
   static long lastInput = millis();
   bool currentlyTyping = false;
 
-  Line& line = document->lines[currentLineNum];
+  Line& line = document.lines[currentLineNum];
 
   if (currentMillis - KBBounceMillis >= 10) {
     char inchar = KB().updateKeypress();
@@ -1098,6 +1103,22 @@ void editor() {
 
     // SHIFT+LEFT
     else if (inchar == 28) {
+      // Define the cycle order
+      static const char styleCycle[] = {'T', '1', '2', '3', '>', 'L', '-', 'C', 'H'};
+      static const int numStyles = sizeof(styleCycle) / sizeof(styleCycle[0]);
+
+      // Find current style index
+      int currentIndex = 0;
+      for (int i = 0; i < numStyles; i++) {
+        if (line.type == styleCycle[i]) {
+          currentIndex = i;
+          break;
+        }
+      }
+
+      // Move to next style in cycle
+      currentIndex = (currentIndex + 1) % numStyles;
+      line.type = styleCycle[currentIndex];
     }
 
     // SHIFT+RIGHT
@@ -1163,7 +1184,7 @@ void editor() {
   }
 }
 
-// INIT
+#pragma region INIT
 void initFonts() {
   // Mono
   fonts[mono].normal = &FreeMono9pt8b;
@@ -1276,8 +1297,6 @@ void initFonts() {
 
 void TXT_INIT(String inPath) {
   /*
-  initFonts();
-
   if (inPath == "") loadMarkdownFile(PM_SDAUTO().getEditingFile());
   else {
     PM_SDAUTO().setEditingFile(inPath);
@@ -1289,15 +1308,7 @@ void TXT_INIT(String inPath) {
   lineScroll = 0;
   updateScreen = true;
   */
-  // Allocate memory for document
-  if (document == nullptr) {
-    document = (Document*)ps_malloc(sizeof(Document));
-    if (document == nullptr) {
-      ESP_LOGE(TAG, "Failed to allocate Document in PSRAM");
-      return;
-    }
-  }
-
+  initFonts();
   loadMarkdownFile(inPath);
   CurrentAppState = TXT;
   CurrentTXTState_NEW = TXT_;
@@ -1320,12 +1331,13 @@ void TXT_INIT_JournalMode() {
   */
 }
 
+#pragma region Loops
 void einkHandler_TXT_NEW() {
   if (updateScreen) {
     updateScreen = false;
     display.setFullWindow();
     display.setTextColor(GxEPD_BLACK);
-    editorEinkDisplay(*document, currentLineNum);
+    editorEinkDisplay(document, currentLineNum);
     EINK().refresh();
   }
 }
