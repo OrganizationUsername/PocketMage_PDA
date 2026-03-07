@@ -165,7 +165,7 @@ void updateTerminalDisp() {
     int y = 14;
     for (const String& s : terminalOutputs) {
       display.setTextColor(GxEPD_WHITE);
-      display.setFont(&FreeMonoBold9pt8b);
+      display.setFont(&FreeMonoBold9pt7b);
       display.setCursor(5, y);
       display.print(s);
       y += 16;
@@ -177,7 +177,7 @@ void updateTerminalDisp() {
         break;
       const String& s = terminalOutputs[i];
       display.setTextColor(GxEPD_WHITE);
-      display.setFont(&FreeMonoBold9pt8b);
+      display.setFont(&FreeMonoBold9pt7b);
       display.setCursor(5, y);
       display.print(s);
       y -= 16;
@@ -199,6 +199,7 @@ void funcSelect(String command) {
   terminalOutputs.push_back(totalMsg);
 
   command.toLowerCase();
+
 
   // Clear command window
   if (command == "clear") {
@@ -774,7 +775,8 @@ void funcSelect(String command) {
         // Verify that file exists
         if (!global_fs->exists(filePath)) {
           returnText = "File not found";
-        } else {
+        } 
+        else {
           // Compile and run with Wrench
           // filePath
           const char* wrenchCode = readCFile(filePath);
@@ -831,8 +833,7 @@ void wr_prompt(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void* 
   const char* promptText = argv[0].asString(inbuf, 1024);
 
   String entered = textPrompt(promptText);
-  if (entered == "_EXIT_")
-    entered = "";
+  if (entered == "_EXIT_") entered = "";
   entered.toCharArray(retbuf, sizeof(retbuf));
 
   wr_makeString(c, &ret, retbuf);
@@ -854,13 +855,13 @@ void wr_inkBackground(WRContext* c, const WRValue* argv, int argn, WRValue& ret,
 }
 
 void wr_inkRect(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void* usr) {
-  int x_origin = argv[0].asInt();
-  int y_origin = argv[1].asInt();
-  int width = argv[2].asInt();
-  int height = argv[3].asInt();
-  bool borderColor = (argv[4].asInt() == 0);
-  bool fillColor = (argv[5].asInt() == 0);
-
+  int x_origin      = argv[0].asInt();
+  int y_origin      = argv[1].asInt();
+  int width         = argv[2].asInt();
+  int height        = argv[3].asInt();
+  bool borderColor  = (argv[4].asInt() == 0);
+  bool fillColor    = (argv[5].asInt() == 0);
+  
   // Black on black or white on white
   if ((fillColor && borderColor) || (!fillColor && !borderColor)) {
     display.fillRect(x_origin, y_origin, width, height, !fillColor);
@@ -869,20 +870,20 @@ void wr_inkRect(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void*
   else if (borderColor && !fillColor) {
     display.drawRect(x_origin, y_origin, width, height, 1);
   }
-  // White border, black fill
+  //White border, black fill
   else if (!borderColor && fillColor) {
     display.drawRect(x_origin, y_origin, width, height, 0);
-    display.fillRect(x_origin + 1, y_origin + 1, width - 2, height - 2, 1);
+    display.fillRect(x_origin+1, y_origin+1, width-2, height-2, 1);
   }
 }
 
 void wr_inkCircle(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void* usr) {
-  int x_origin = argv[0].asInt();
-  int y_origin = argv[1].asInt();
-  int radius = argv[2].asInt();
-  bool borderColor = (argv[3].asInt() == 0);
-  bool fillColor = (argv[4].asInt() == 0);
-
+  int x_origin      = argv[0].asInt();
+  int y_origin      = argv[1].asInt();
+  int radius        = argv[2].asInt();
+  bool borderColor  = (argv[3].asInt() == 0);
+  bool fillColor    = (argv[4].asInt() == 0);
+  
   // Black on black or white on white
   if ((fillColor && borderColor) || (!fillColor && !borderColor)) {
     display.fillCircle(x_origin, y_origin, radius, fillColor);
@@ -891,27 +892,25 @@ void wr_inkCircle(WRContext* c, const WRValue* argv, int argn, WRValue& ret, voi
   else if (borderColor && !fillColor) {
     display.drawCircle(x_origin, y_origin, radius, 1);
   }
-  // White border, black fill
+  //White border, black fill
   else if (!borderColor && fillColor) {
     display.drawCircle(x_origin, y_origin, radius, 0);
-    display.fillCircle(x_origin, y_origin, radius - 2, 1);
+    display.fillCircle(x_origin, y_origin, radius-2, 1);
   }
 }
 
 void wr_inkText(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void* usr) {
   char buf[1024];
 
-  int x_origin = argv[0].asInt();
-  int y_origin = argv[1].asInt();
-  int size = argv[2].asInt();
-  bool color = (argv[3].asInt() != 0);
-  const char* text = argv[4].asString(buf, 1024);
-
+  int x_origin      = argv[0].asInt();
+  int y_origin      = argv[1].asInt();
+  int size          = argv[2].asInt();
+  bool color        = (argv[3].asInt() != 0);
+  const char* text  = argv[4].asString(buf, 1024);
+  
   // Set color
-  if (color)
-    display.setTextColor(GxEPD_BLACK);
-  else
-    display.setTextColor(GxEPD_WHITE);
+  if (color) display.setTextColor(GxEPD_BLACK);
+  else display.setTextColor(GxEPD_WHITE);
 
   // Set font
   switch (size) {
@@ -919,16 +918,16 @@ void wr_inkText(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void*
       display.setFont(&Font5x7Fixed);
       break;
     case 2:
-      display.setFont(&FreeMonoBold9pt8b);
+      display.setFont(&FreeMonoBold9pt7b);
       break;
     case 3:
-      display.setFont(&FreeMonoBold12pt8b);
+      display.setFont(&FreeMonoBold12pt7b);
       break;
     default:
-      display.setFont(&FreeMonoBold9pt8b);
+      display.setFont(&FreeMonoBold9pt7b);
       break;
   }
-
+  
   display.setCursor(x_origin, y_origin);
   display.print(text);
 }
@@ -943,18 +942,18 @@ void wr_oledBackground(WRContext* c, const WRValue* argv, int argn, WRValue& ret
   bool bgColor = (argv[0].asInt() == 0);
 
   u8g2.setDrawColor(bgColor);
-  u8g2.drawBox(0, 0, u8g2.getDisplayWidth(), u8g2.getDisplayHeight());
+  u8g2.drawBox(0,0,u8g2.getDisplayWidth(), u8g2.getDisplayHeight());
   u8g2.setDrawColor(1);
 }
 
 void wr_oledRect(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void* usr) {
-  int x_origin = argv[0].asInt();
-  int y_origin = argv[1].asInt();
-  int width = argv[2].asInt();
-  int height = argv[3].asInt();
-  bool borderColor = (argv[4].asInt() == 0);
-  bool fillColor = (argv[5].asInt() == 0);
-
+  int x_origin      = argv[0].asInt();
+  int y_origin      = argv[1].asInt();
+  int width         = argv[2].asInt();
+  int height        = argv[3].asInt();
+  bool borderColor  = (argv[4].asInt() == 0);
+  bool fillColor    = (argv[5].asInt() == 0);
+  
   // Black on black or white on white
   if ((fillColor && borderColor) || (!fillColor && !borderColor)) {
     u8g2.setDrawColor(!fillColor);
@@ -965,23 +964,23 @@ void wr_oledRect(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void
     u8g2.setDrawColor(1);
     u8g2.drawFrame(x_origin, y_origin, width, height);
   }
-  // White border, black fill
+  //White border, black fill
   else if (!borderColor && fillColor) {
     u8g2.setDrawColor(0);
     u8g2.drawFrame(x_origin, y_origin, width, height);
     u8g2.setDrawColor(1);
-    u8g2.drawBox(x_origin + 1, y_origin + 1, width - 2, height - 2);
+    u8g2.drawBox(x_origin+1, y_origin+1, width-2, height-2);
   }
 
   u8g2.setDrawColor(1);
 }
 
 void wr_oledCircle(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void* usr) {
-  int x_origin = argv[0].asInt();
-  int y_origin = argv[1].asInt();
-  int radius = argv[2].asInt();
-  bool borderColor = (argv[3].asInt() == 0);
-
+  int x_origin      = argv[0].asInt();
+  int y_origin      = argv[1].asInt();
+  int radius        = argv[2].asInt();
+  bool borderColor  = (argv[3].asInt() == 0);
+  
   u8g2.setDrawColor(borderColor);
   u8g2.drawCircle(x_origin, y_origin, radius);
 
@@ -991,12 +990,12 @@ void wr_oledCircle(WRContext* c, const WRValue* argv, int argn, WRValue& ret, vo
 void wr_oledText(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void* usr) {
   char buf[1024];
 
-  int x_origin = argv[0].asInt();
-  int y_origin = argv[1].asInt();
-  int size = argv[2].asInt();
-  bool color = (argv[3].asInt() == 0);
-  const char* text = argv[4].asString(buf, 1024);
-
+  int x_origin      = argv[0].asInt();
+  int y_origin      = argv[1].asInt();
+  int size          = argv[2].asInt();
+  bool color        = (argv[3].asInt() == 0);
+  const char* text  = argv[4].asString(buf, 1024);
+  
   // Set color
   u8g2.setDrawColor(color);
 
@@ -1015,7 +1014,7 @@ void wr_oledText(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void
       u8g2.setFont(u8g2_font_lubR18_tf);  // regular
       break;
   }
-
+  
   u8g2.drawStr(x_origin, y_origin, text);
 
   u8g2.setDrawColor(1);
@@ -1032,7 +1031,7 @@ void wr_toInt(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void* u
   char inbuf[1024];
 
   const char* inString = argv[0].asString(inbuf, 1024);
-
+  
   wr_makeInt(&ret, atoi(inString));
 }
 
@@ -1040,7 +1039,7 @@ void wr_random(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void* 
   int min = argv[0].asInt();
   int max = argv[1].asInt();
 
-  wr_makeInt(&ret, ((esp_random() % ((max - min) + 1)) + min));
+  wr_makeInt(&ret, ((esp_random() % ((max-min)+1)) + min));
 }
 
 // ----- Wrench Functions ----- //
@@ -1114,7 +1113,7 @@ void compileWrench(const char* wrenchCode) {
       if (*p == '\n') {
         int len = p - lineStart;
         if (len > 0 && lineStart[len - 1] == '\r') {
-          len--;  // handle CRLF
+          len--; // handle CRLF
         }
 
         // limit to 29 chars
@@ -1193,7 +1192,8 @@ void processKB_TERMINAL() {
           // Add a line and go to it
           if (cursor_pos == 0 && potionLines[currentPotionLine].length() > 0) {
             potionLines.insert(potionLines.begin() + currentPotionLine, "");
-          } else {
+          }
+          else {
             potionLines.insert(potionLines.begin() + currentPotionLine + 1, "");
             currentPotionLine++;
           }
@@ -1231,7 +1231,8 @@ void processKB_TERMINAL() {
               potionLines[currentPotionLine].remove(cursor_pos - 1, 1);
             }
             cursor_pos--;
-          } else if (potionLines[currentPotionLine].length() == 0) {
+          }
+          else if (potionLines[currentPotionLine].length() == 0) {
             potionLines.erase(potionLines.begin() + currentPotionLine);
             newState = true;
           }
@@ -1257,10 +1258,9 @@ void processKB_TERMINAL() {
             // Line is in bounds
             if (line >= 0 && line < potionLines.size()) {
               currentPotionLine = line;
-            } else if (line < 0)
-              currentPotionLine = 0;
-            else if (line >= potionLines.size())
-              currentPotionLine = potionLines.size() - 1;
+            }
+            else if (line < 0) currentPotionLine = 0;
+            else if (line >= potionLines.size()) currentPotionLine = potionLines.size() - 1;
             newState = true;
           }
           KB().setKeyboardState(NORMAL);
@@ -1288,7 +1288,7 @@ void processKB_TERMINAL() {
         else if (inchar == 6) {
           if (editFile != "")
             savePotionFile(editFile);
-          newState = true;
+            newState = true;
           break;
         }
         // FN+CENTER
@@ -1312,7 +1312,8 @@ void processKB_TERMINAL() {
         // TAB, SHIFT+TAB / FN+TAB, FN+SHIFT+TAB
         else if (inchar == 9 || inchar == 14) {
           potionLines[currentPotionLine] = "  " + potionLines[currentPotionLine];
-        } else {
+        } 
+        else {
           // split line at cursor_pos
           if (cursor_pos == 0) {
             potionLines[currentPotionLine] = inchar + potionLines[currentPotionLine];
@@ -1394,12 +1395,12 @@ void einkHandler_TERMINAL() {
             display.print(s);
             y += 10;
           }
-        } else {
+        } 
+        else {
           if (currentPotionLine <= 20) {
             int y = 10;
             for (size_t i = 0; i < potionLines.size(); i++) {
-              if (i < 0 || i > potionLines.size() || y < 0 || y > (display.height() + 10))
-                continue;
+              if (i < 0 || i > potionLines.size() || y < 0 || y > (display.height()+10)) continue;
 
               const String& s = potionLines[i];
 
@@ -1420,11 +1421,11 @@ void einkHandler_TERMINAL() {
               display.print(s);
               y += 10;
             }
-          } else {
+          }
+          else {
             int y = 10;
             for (size_t i = currentPotionLine - 20; i < currentPotionLine + 3; i++) {
-              if (i < 0 || i > potionLines.size() || y < 0 || y > (display.height() + 10))
-                continue;
+              if (i < 0 || i > potionLines.size() || y < 0 || y > (display.height()+10)) continue;
 
               const String& s = potionLines[i];
 

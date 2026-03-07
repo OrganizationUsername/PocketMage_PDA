@@ -66,7 +66,7 @@ void checkTimeout() {
             display.setFullWindow();
             EINK().einkTextDynamic(true, true);
 
-            display.setFont(&FreeMonoBold9pt8b);
+            display.setFont(&FreeMonoBold9pt7b);
 
             display.fillRect(0, display.height() - 26, display.width(), 26, GxEPD_WHITE);
             display.drawRect(0, display.height() - 20, display.width(), 20, GxEPD_BLACK);
@@ -141,7 +141,7 @@ void checkTimeout() {
             EINK().setFullRefreshAfter(FULL_REFRESH_AFTER + 1);
             display.setFullWindow();
             EINK().einkTextDynamic(true, true);
-            display.setFont(&FreeMonoBold9pt8b);
+            display.setFont(&FreeMonoBold9pt7b);
 
             display.fillRect(0, display.height() - 26, display.width(), 26, GxEPD_WHITE);
             display.drawRect(0, display.height() - 20, display.width(), 20, GxEPD_BLACK);
@@ -378,13 +378,11 @@ String textPrompt(String promptText, String prefix) {
   long lastInput = millis();
 
   for (;;) {
-// Run background tasks
-#if !OTA_APP  // POCKETMAGE_OS
-    if (!noTimeout)
-      checkTimeout();
-    if (DEBUG_VERBOSE)
-      printDebug();
-#endif
+    // Run background tasks
+    #if !OTA_APP // POCKETMAGE_OS
+      if (!noTimeout)  checkTimeout();
+      if (DEBUG_VERBOSE) printDebug();
+    #endif
     updateBattState();
 
     int currentMillis = millis();
@@ -394,13 +392,11 @@ String textPrompt(String promptText, String prefix) {
     if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
       char inchar = KB().updateKeypress();
 
-      if (inchar != 0)
-        lastInput = millis();
+      if (inchar != 0) lastInput = millis();
 
       // HANDLE INPUTS
       // No char recieved
-      if (inchar == 0)
-        ;
+      if (inchar == 0) ;
       // CR Recieved
       else if (inchar == 13) {
         cursor_pos = 0;
@@ -521,17 +517,11 @@ String textPrompt(String promptText, String prefix) {
         OLEDFPSMillis = currentMillis;
 
         if (millis() - lastInput > IDLE_TIME) {
-#if !OTA_APP
           mageIdle(true);
-#endif
         } else {
-#if !OTA_APP
           resetIdle();
-#endif
-          if (prefix != "")
-            OLED().oledLine(prefix + currentLine, cursor_pos + prefix.length(), false, promptText);
-          else
-            OLED().oledLine(currentLine, cursor_pos, false, promptText);
+          if (prefix != "") OLED().oledLine(prefix + currentLine, cursor_pos+prefix.length(), false, promptText);
+          else OLED().oledLine(currentLine, cursor_pos, false, promptText);
         }
       }
     }

@@ -122,7 +122,7 @@ void deepSleep(bool alternateScreenSaver) {
 
         // Show file
         display.drawBitmap(0, 0, buf, 320, 240, GxEPD_BLACK);
-        display.setFont(&FreeMonoBold9pt8b);
+        display.setFont(&FreeMonoBold9pt7b);
         display.setTextColor(GxEPD_BLACK);
         display.setCursor(5, display.height() - 5);
         display.print(binFiles[fileIndex].c_str());
@@ -231,12 +231,7 @@ void hardReset(void* parameter) {
     if ((millis() - heldSince) > 3000) {
       OLED().oledWord("Process broken");
       delay(1000);
-#if !OTA_APP
       HOME_INIT();
-#else
-      // OTA_APP: reboot method that sets reboot to OS instead of direct reboot
-      rebootToPocketMage();
-#endif
     }
   }
 }
@@ -296,13 +291,13 @@ void PocketMage_INIT() {
     ESP_LOGV(TAG, "MP2722 Failed to Init");
   }
   // Start hardreset task
-  xTaskCreatePinnedToCore(pocketmage::hardReset,   // Function name
-                          "hardReset",             // Task name
-                          1024,                    // Stack size
-                          NULL,                    // Parameters
-                          0,                       // Priority
-                          &einkHandlerTaskHandle,  // Task handle
-                          1                        // Core ID
+  xTaskCreatePinnedToCore(pocketmage::hardReset,    // Function name
+                          "hardReset",              // Task name
+                          1024,                     // Stack size
+                          NULL,                     // Parameters
+                          0,                        // Priority
+                          &einkHandlerTaskHandle,   // Task handle
+                          1                         // Core ID
   );
 
   // SET CPU CLOCK FOR POWER SAVE MODE

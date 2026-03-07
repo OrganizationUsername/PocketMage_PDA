@@ -3,7 +3,7 @@
 
 #include <globals.h>
 
-static constexpr const char* TAG = "MAIN";  // TODO: Come up with a better tag
+static constexpr const char* TAG = "MAIN"; // TODO: Come up with a better tag
 
 //        .o.       ooooooooo.   ooooooooo.    .oooooo..o  //
 //       .888.      `888   `Y88. `888   `Y88. d8P'    `Y8  //
@@ -13,13 +13,14 @@ static constexpr const char* TAG = "MAIN";  // TODO: Come up with a better tag
 //   .8'     `888.   888          888         oo     .d8P  //
 //  o88o     o8888o o888o        o888o        8""88888P'   //
 
+
 // ADD E-INK HANDLER APP SCRIPTS HERE
 void applicationEinkHandler() {
-#if OTA_APP
-  einkHandler_APP();  // OTA_APP: entry point
-#endif
-// OTA_APP: Remove switch statement
-#if !OTA_APP  // POCKETMAGE_OS
+  #if OTA_APP
+    einkHandler_APP(); // OTA_APP: entry point
+  #endif
+  // OTA_APP: Remove switch statement
+  #if !OTA_APP // POCKETMAGE_OS
   switch (CurrentAppState) {
     case HOME:
       einkHandler_HOME();
@@ -59,46 +60,46 @@ void applicationEinkHandler() {
       einkHandler_HOME();
       break;
   }
-#endif  // POCKETMAGE_OS
+  #endif // POCKETMAGE_OS
 }
 
 // ADD PROCESS/KEYBOARD APP SCRIPTS HERE
 void processKB() {
   // Check for USB KB
-  KB().checkUSBKB();
+  //KB().checkUSBKB();
 
-// Example OTA APP
-// Displays a progress bar and then reboots to PocketMage OS
-// Remove this when making a real OTA APP + uncomment processKB_APP();
-#if OTA_APP
-  static int x = 0;
-  ESP_LOGD(TAG, "OTA APP MODE - PROGRESS: %d\n", x);
-  // Draw a progress bar across the screen and then return to PocketMage OS
-  u8g2.clearBuffer();
-  u8g2.drawBox(0, 0, x, u8g2.getDisplayHeight());
+  // Example OTA APP 
+  // Displays a progress bar and then reboots to PocketMage OS
+  // Remove this when making a real OTA APP + uncomment processKB_APP();
+  #if OTA_APP
+    static int x = 0;
+    ESP_LOGD(TAG, "OTA APP MODE - PROGRESS: %d\n", x);
+    // Draw a progress bar across the screen and then return to PocketMage OS
+    u8g2.clearBuffer();
+    u8g2.drawBox(0,0,x,u8g2.getDisplayHeight());
+    
+    x+=5;
+    
+    if (x > u8g2.getDisplayWidth()) {
+      // Return to pocketMage OS
+      rebootToPocketMage();
+      // OTA_APP: reboot method that sets reboot flag instead of direct reboot
+      // pocketmage::checkRebootOTA();   // alternative method for testing OTA_APP rebooting
+      // prefs.begin("PocketMage", false);
+      // prefs.putBool("OTA_Reboot", true);
+      // prefs.end();
+      // pocketmage::deepSleep();
+    }
 
-  x += 5;
-
-  if (x > u8g2.getDisplayWidth()) {
-    // Return to pocketMage OS
-    rebootToPocketMage();
-    // OTA_APP: reboot method that sets reboot flag instead of direct reboot
-    // pocketmage::checkRebootOTA();   // alternative method for testing OTA_APP rebooting
-    // prefs.begin("PocketMage", false);
-    // prefs.putBool("OTA_Reboot", true);
-    // prefs.end();
-    // pocketmage::deepSleep();
-  }
-
-  u8g2.sendBuffer();
-  delay(10);
-#if OTA_APP
-  processKB_APP();  // OTA_APP: entry point
-#endif
-  return;
-#endif
-// OTA_APP: Remove switch statement
-#if !OTA_APP  // POCKETMAGE_OS
+    u8g2.sendBuffer();
+    delay(10);
+    #if OTA_APP
+    processKB_APP(); // OTA_APP: entry point
+    #endif
+    return;
+  #endif
+  // OTA_APP: Remove switch statement
+  #if !OTA_APP // POCKETMAGE_OS
   switch (CurrentAppState) {
     case HOME:
       processKB_HOME();
@@ -138,7 +139,7 @@ void processKB() {
       processKB_HOME();
       break;
   }
-#endif  // POCKETMAGE_OS
+  #endif // POCKETMAGE_OS
 }
 
 //  ooo        ooooo       .o.       ooooo ooooo      ooo  //
@@ -157,15 +158,13 @@ void setup() {
 
 // Keyboard / OLED Loop
 void loop() {
-// Run background tasks
-#if !OTA_APP  // POCKETMAGE_OS
-  if (!noTimeout)
-    checkTimeout();
-  if (DEBUG_VERBOSE)
-    printDebug();
-#endif
+  // Run background tasks
+  #if !OTA_APP // POCKETMAGE_OS
+    if (!noTimeout)  checkTimeout();
+    if (DEBUG_VERBOSE) printDebug();
+  #endif
   updateBattState();
-
+  
   processKB();
 
   // Yield to watchdog
@@ -175,7 +174,7 @@ void loop() {
 
 // E-Ink Loop
 void einkHandler(void* parameter) {
-  vTaskDelay(pdMS_TO_TICKS(250));
+  vTaskDelay(pdMS_TO_TICKS(250)); 
   for (;;) {
     applicationEinkHandler();
 

@@ -1,7 +1,7 @@
 
 #include <globals.h>
-#if !OTA_APP                                    // POCKETMAGE_OS
-static constexpr const char* TAG = "CALENDAR";  // Tag for all calls to ESP_LOG
+#if !OTA_APP // POCKETMAGE_OS
+static constexpr const char* TAG = "CALENDAR"; // Tag for all calls to ESP_LOG
 
 enum CalendarState { WEEK, MONTH, NEW_EVENT, VIEW_EVENT, SUN, MON, TUE, WED, THU, FRI, SAT };
 CalendarState CurrentCalendarState = MONTH;
@@ -39,26 +39,26 @@ void CALENDAR_INIT() {
 }
 
 // Event Data Management
-//
+// 
 #pragma message "TODO: Migrate to a better/global file management system"
 void updateEventArray() {
   SDActive = true;
   pocketmage::setCpuSpeed(240);
   delay(50);
 
-  File file = global_fs->open("/sys/events.txt", "r");  // Open the text file in read mode
+  File file = global_fs->open("/sys/events.txt", "r"); // Open the text file in read mode
   if (!file) {
     ESP_LOGE(TAG, "Failed to open file for reading: %s", file.path());
     return;
   }
 
-  calendarEvents.clear();  // Clear the existing vector before loading the new data
+  calendarEvents.clear(); // Clear the existing vector before loading the new data
 
   // Loop through the file, line by line
   while (file.available()) {
     String line = file.readStringUntil('\n');  // Read a line from the file
-    line.trim();                               // Remove any extra spaces or newlines
-
+    line.trim();  // Remove any extra spaces or newlines
+    
     // Skip empty lines
     if (line.length() == 0) {
       continue;
@@ -71,9 +71,9 @@ void updateEventArray() {
     uint8_t delimiterPos4 = line.indexOf('|', delimiterPos3 + 1);
     uint8_t delimiterPos5 = line.indexOf('|', delimiterPos4 + 1);
 
-    String eventName = line.substring(0, delimiterPos1);
-    String startDate = line.substring(delimiterPos1 + 1, delimiterPos2);
-    String startTime = line.substring(delimiterPos2 + 1, delimiterPos3);
+    String eventName  = line.substring(0, delimiterPos1);
+    String startDate   = line.substring(delimiterPos1 + 1, delimiterPos2);
+    String startTime  = line.substring(delimiterPos2 + 1, delimiterPos3);
     String duration = line.substring(delimiterPos3 + 1, delimiterPos4);
     String repeat = line.substring(delimiterPos4 + 1, delimiterPos5);
     String note = line.substring(delimiterPos5 + 1);
@@ -84,16 +84,14 @@ void updateEventArray() {
 
   file.close();  // Close the file
 
-  if (SAVE_POWER)
-    pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+  if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
   SDActive = false;
 }
 
-void sortEventsByDate(std::vector<std::vector<String>>& calendarEvents) {
-  std::sort(calendarEvents.begin(), calendarEvents.end(),
-            [](const std::vector<String>& a, const std::vector<String>& b) {
-              return a[1] < b[1];  // Compare dueDate strings
-            });
+void sortEventsByDate(std::vector<std::vector<String>> &calendarEvents) {
+  std::sort(calendarEvents.begin(), calendarEvents.end(), [](const std::vector<String> &a, const std::vector<String> &b) {
+    return a[1] < b[1]; // Compare dueDate strings
+  });
 }
 
 void updateEventsFile() {
@@ -106,25 +104,20 @@ void updateEventsFile() {
   // Iterate through the calendarEvents vector and append each task to the file
   for (size_t i = 0; i < calendarEvents.size(); i++) {
     // Create a string from the task's attributes with "|" delimiter
-    String eventInfo = calendarEvents[i][0] + "|" + calendarEvents[i][1] + "|" +
-                       calendarEvents[i][2] + "|" + calendarEvents[i][3] + "|" +
-                       calendarEvents[i][4] + "|" + calendarEvents[i][5];
-
+    String eventInfo = calendarEvents[i][0] + "|" + calendarEvents[i][1] + "|" + calendarEvents[i][2] + "|" + calendarEvents[i][3]+ "|" + calendarEvents[i][4]+ "|" + calendarEvents[i][5];
+    
     // Append the task info to the file
     PM_SDAUTO().appendToFile("/sys/events.txt", eventInfo);
   }
 
-  if (SAVE_POWER)
-    pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+  if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
   SDActive = false;
 }
 
-void addEvent(String eventName, String startDate, String startTime, String duration, String repeat,
-              String note) {
-  String eventInfo =
-      eventName + "|" + startDate + "|" + startTime + "|" + duration + "|" + repeat + "|" + note;
+void addEvent(String eventName, String startDate, String startTime , String duration, String repeat, String note) {
+  String eventInfo = eventName+"|"+startDate+"|"+startTime +"|"+duration+"|"+repeat+"|"+note;
   updateEventArray();
-  calendarEvents.push_back({eventName, startDate, startTime, duration, repeat, note});
+  calendarEvents.push_back({eventName, startDate, startTime , duration, repeat, note});
   sortEventsByDate(calendarEvents);
   updateEventsFile();
 }
@@ -157,8 +150,14 @@ void updateEventByIndex(int indexToUpdate) {
     std::vector<String> oldEvent = dayEvents[indexToUpdate];
 
     // New event data
-    std::vector<String> updatedEvent = {newEventName,     newEventStartDate, newEventStartTime,
-                                        newEventDuration, newEventRepeat,    newEventNote};
+    std::vector<String> updatedEvent = {
+      newEventName,
+      newEventStartDate,
+      newEventStartTime,
+      newEventDuration,
+      newEventRepeat,
+      newEventNote
+    };
 
     // Update dayEvents
     dayEvents[indexToUpdate] = updatedEvent;
@@ -182,33 +181,20 @@ String intToYYYYMMDD(int year_, int month_, int date_) {
 }
 
 String getMonthName(int month) {
-  switch (month) {
-    case 1:
-      return "Jan";
-    case 2:
-      return "Feb";
-    case 3:
-      return "Mar";
-    case 4:
-      return "Apr";
-    case 5:
-      return "May";
-    case 6:
-      return "Jun";
-    case 7:
-      return "Jul";
-    case 8:
-      return "Aug";
-    case 9:
-      return "Sep";
-    case 10:
-      return "Oct";
-    case 11:
-      return "Nov";
-    case 12:
-      return "Dec";
-    default:
-      return "ERR";
+  switch(month) {
+    case 1: return "Jan";
+    case 2: return "Feb";
+    case 3: return "Mar";
+    case 4: return "Apr";
+    case 5: return "May";
+    case 6: return "Jun";
+    case 7: return "Jul";
+    case 8: return "Aug";
+    case 9: return "Sep";
+    case 10: return "Oct";
+    case 11: return "Nov";
+    case 12: return "Dec";
+    default: return "ERR";
   }
 }
 
@@ -221,7 +207,7 @@ int getDayOfWeek(int year, int month, int day) {
   int K = year % 100;
   int J = year / 100;
 
-  int h = (day + 13 * (month + 1) / 5 + K + K / 4 + J / 4 + 5 * J) % 7;
+  int h = (day + 13*(month + 1)/5 + K + K/4 + J/4 + 5*J) % 7;
 
   // Convert Zeller’s output to: 0 = Sunday, ..., 6 = Saturday
   int d = (h + 6) % 7;
@@ -230,12 +216,10 @@ int getDayOfWeek(int year, int month, int day) {
 
 int stringToPositiveInt(String input) {
   input.trim();
-  if (input.length() == 0)
-    return -1;
+  if (input.length() == 0) return -1;
 
   for (int i = 0; i < input.length(); i++) {
-    if (!isDigit(input[i]))
-      return -1;
+    if (!isDigit(input[i])) return -1;
   }
 
   return input.toInt();
@@ -255,8 +239,10 @@ int daysInMonth(int year, int month) {
 void commandSelectMonth(String command) {
   command.toLowerCase();
 
-  const char* monthNames[] = {"jan", "feb", "mar", "apr", "may", "jun",
-                              "jul", "aug", "sep", "oct", "nov", "dec"};
+  const char* monthNames[] = {
+    "jan", "feb", "mar", "apr", "may", "jun",
+    "jul", "aug", "sep", "oct", "nov", "dec"
+  };
 
   if (command == "n") {
     CurrentCalendarState = NEW_EVENT;
@@ -269,9 +255,9 @@ void commandSelectMonth(String command) {
     newEventDuration = "";
     newEventRepeat = "";
     newEventNote = "";
-    currentLine = "";
+    currentLine     = "";
 
-    newState = true;
+    newState        = true;
     KB().setKeyboardState(NORMAL);
     return;
   }
@@ -291,7 +277,7 @@ void commandSelectMonth(String command) {
           return;
         }
 
-        currentMonth = i + 1;  // 1-indexed month
+        currentMonth = i + 1;        // 1-indexed month
         currentYear = yearInt;
         newState = true;
 
@@ -312,8 +298,7 @@ void commandSelectMonth(String command) {
     int month = command.substring(4, 6).toInt();
     int date = command.substring(6, 8).toInt();
 
-    if (year < 1970 || year > 2200 || month < 1 || month > 12 || date < 1 ||
-        date > daysInMonth(month, year)) {
+    if (year < 1970 || year > 2200 || month < 1 || month > 12 || date < 1 || date > daysInMonth(month, year)) {
       OLED().oledWord("Invalid");
       delay(500);
       return;
@@ -354,7 +339,7 @@ void commandSelectMonth(String command) {
         break;
     }
 
-    newState = true;
+    newState        = true;
     KB().setKeyboardState(NORMAL);
     return;
   }
@@ -367,7 +352,8 @@ void commandSelectMonth(String command) {
       OLED().oledWord("Invalid");
       delay(500);
       return;
-    } else {
+    }
+    else {
       currentDate = intDay;
 
       int dayOfWeek = getDayOfWeek(currentYear, currentMonth, currentDate);
@@ -396,7 +382,7 @@ void commandSelectMonth(String command) {
           break;
       }
 
-      newState = true;
+      newState        = true;
       KB().setKeyboardState(NORMAL);
       return;
     }
@@ -417,9 +403,9 @@ void commandSelectWeek(String command) {
     newEventDuration = "";
     newEventRepeat = "";
     newEventNote = "";
-    currentLine = "";
+    currentLine     = "";
 
-    newState = true;
+    newState        = true;
     KB().setKeyboardState(NORMAL);
     return;
   }
@@ -428,13 +414,13 @@ void commandSelectWeek(String command) {
     CurrentCalendarState = SUN;
 
     DateTime now = CLOCK().nowDT();
-    int todayDOW = getDayOfWeek(now.year(), now.month(), now.day());
+    int todayDOW = getDayOfWeek(now.year(), now.month(), now.day()); 
     DateTime currentSunday = now - TimeSpan(todayDOW, 0, 0, 0);
     DateTime viewedSunday = currentSunday + TimeSpan(weekOffsetCount * 7, 0, 0, 0);
 
-    currentDate = viewedSunday.day();
+    currentDate  = viewedSunday.day();
     currentMonth = viewedSunday.month();
-    currentYear = viewedSunday.year();
+    currentYear  = viewedSunday.year();
 
     newState = true;
     KB().setKeyboardState(NORMAL);
@@ -448,9 +434,9 @@ void commandSelectWeek(String command) {
     DateTime currentSunday = now - TimeSpan(todayDOW, 0, 0, 0);
     DateTime viewedMonday = currentSunday + TimeSpan(weekOffsetCount * 7 + 1, 0, 0, 0);
 
-    currentDate = viewedMonday.day();
+    currentDate  = viewedMonday.day();
     currentMonth = viewedMonday.month();
-    currentYear = viewedMonday.year();
+    currentYear  = viewedMonday.year();
 
     newState = true;
     KB().setKeyboardState(NORMAL);
@@ -464,9 +450,9 @@ void commandSelectWeek(String command) {
     DateTime currentSunday = now - TimeSpan(todayDOW, 0, 0, 0);
     DateTime viewedTuesday = currentSunday + TimeSpan(weekOffsetCount * 7 + 2, 0, 0, 0);
 
-    currentDate = viewedTuesday.day();
+    currentDate  = viewedTuesday.day();
     currentMonth = viewedTuesday.month();
-    currentYear = viewedTuesday.year();
+    currentYear  = viewedTuesday.year();
 
     newState = true;
     KB().setKeyboardState(NORMAL);
@@ -480,9 +466,9 @@ void commandSelectWeek(String command) {
     DateTime currentSunday = now - TimeSpan(todayDOW, 0, 0, 0);
     DateTime viewedWednesday = currentSunday + TimeSpan(weekOffsetCount * 7 + 3, 0, 0, 0);
 
-    currentDate = viewedWednesday.day();
+    currentDate  = viewedWednesday.day();
     currentMonth = viewedWednesday.month();
-    currentYear = viewedWednesday.year();
+    currentYear  = viewedWednesday.year();
 
     newState = true;
     KB().setKeyboardState(NORMAL);
@@ -496,9 +482,9 @@ void commandSelectWeek(String command) {
     DateTime currentSunday = now - TimeSpan(todayDOW, 0, 0, 0);
     DateTime viewedThursday = currentSunday + TimeSpan(weekOffsetCount * 7 + 4, 0, 0, 0);
 
-    currentDate = viewedThursday.day();
+    currentDate  = viewedThursday.day();
     currentMonth = viewedThursday.month();
-    currentYear = viewedThursday.year();
+    currentYear  = viewedThursday.year();
 
     newState = true;
     KB().setKeyboardState(NORMAL);
@@ -512,9 +498,9 @@ void commandSelectWeek(String command) {
     DateTime currentSunday = now - TimeSpan(todayDOW, 0, 0, 0);
     DateTime viewedFriday = currentSunday + TimeSpan(weekOffsetCount * 7 + 5, 0, 0, 0);
 
-    currentDate = viewedFriday.day();
+    currentDate  = viewedFriday.day();
     currentMonth = viewedFriday.month();
-    currentYear = viewedFriday.year();
+    currentYear  = viewedFriday.year();
 
     newState = true;
     KB().setKeyboardState(NORMAL);
@@ -528,9 +514,9 @@ void commandSelectWeek(String command) {
     DateTime currentSunday = now - TimeSpan(todayDOW, 0, 0, 0);
     DateTime viewedSaturday = currentSunday + TimeSpan(weekOffsetCount * 7 + 6, 0, 0, 0);
 
-    currentDate = viewedSaturday.day();
+    currentDate  = viewedSaturday.day();
     currentMonth = viewedSaturday.month();
-    currentYear = viewedSaturday.year();
+    currentYear  = viewedSaturday.year();
 
     newState = true;
     KB().setKeyboardState(NORMAL);
@@ -544,16 +530,16 @@ void commandSelectDay(String command) {
     CurrentCalendarState = NEW_EVENT;
 
     // Initialize new blank event
-    newEventState = 0;
-    newEventName = "";
+    newEventState     = 0;
+    newEventName      = "";
     newEventStartDate = intToYYYYMMDD(currentYear, currentMonth, currentDate);
     newEventStartTime = "";
-    newEventDuration = "";
-    newEventRepeat = "";
-    newEventNote = "";
-    currentLine = "";
+    newEventDuration  = "";
+    newEventRepeat    = "";
+    newEventNote      = "";
+    currentLine       = "";
 
-    newState = true;
+    newState          = true;
     KB().setKeyboardState(NORMAL);
     return;
   }
@@ -566,18 +552,18 @@ void commandSelectDay(String command) {
       std::vector<String>& evt = dayEvents[index];
 
       editingEventIndex = index;
-      newEventState = -1;
-      newEventName = evt[0];
+      newEventState     = -1;
+      newEventName      = evt[0];
       newEventStartDate = evt[1];
       newEventStartTime = evt[2];
-      newEventDuration = evt[3];
-      newEventRepeat = evt[4];
-      newEventNote = evt[5];
-      currentLine = "";
+      newEventDuration  = evt[3];
+      newEventRepeat    = evt[4];
+      newEventNote      = evt[5];
+      currentLine       = "";
 
       CurrentCalendarState = VIEW_EVENT;
       KB().setKeyboardState(NORMAL);
-      newState = true;
+      newState             = true;
     }
   }
 }
@@ -589,19 +575,20 @@ int checkEvents(String YYYYMMDD, bool countOnly = false) {
   updateEventArray();
 
   // Return -1 if input format is invalid
-  if (YYYYMMDD.length() != 8)
-    return -1;
+  if (YYYYMMDD.length() != 8) return -1;
 
   // Convert input to DateTime
-  int year = YYYYMMDD.substring(0, 4).toInt();
+  int year  = YYYYMMDD.substring(0, 4).toInt();
   int month = YYYYMMDD.substring(4, 6).toInt();
-  int day = YYYYMMDD.substring(6, 8).toInt();
+  int day   = YYYYMMDD.substring(6, 8).toInt();
   DateTime dt(year, month, day);
 
   // Define helper strings
-  const char* daysOfWeek[] = {"Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"};
-  const char* monthNames[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+  const char* daysOfWeek[] = { "Su", "Mo", "Tu", "We", "Th", "Fr", "Sa" };
+  const char* monthNames[] = {
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  };
 
   String weekday = String(daysOfWeek[dt.dayOfTheWeek()]);
   String weekdayUpper = weekday;
@@ -625,8 +612,7 @@ int checkEvents(String YYYYMMDD, bool countOnly = false) {
 
     // Direct match
     if (eventDate == YYYYMMDD) {
-      if (!countOnly)
-        dayEvents.push_back(calendarEvents[i]);
+      if (!countOnly) dayEvents.push_back(calendarEvents[i]);
       eventCount++;
       continue;
     }
@@ -636,13 +622,11 @@ int checkEvents(String YYYYMMDD, bool countOnly = false) {
       repeatCode.toUpperCase();
 
       // Skip repeat if date is before original event date
-      if (eventDate.length() == 8 && YYYYMMDD < eventDate)
-        continue;
+      if (eventDate.length() == 8 && YYYYMMDD < eventDate) continue;
 
       // DAILY
       if (repeatCode == "DAILY") {
-        if (!countOnly)
-          dayEvents.push_back(calendarEvents[i]);
+        if (!countOnly) dayEvents.push_back(calendarEvents[i]);
         eventCount++;
         continue;
       }
@@ -655,8 +639,7 @@ int checkEvents(String YYYYMMDD, bool countOnly = false) {
         for (int j = 0; j + 1 < days.length(); j += 2) {
           String codeDay = days.substring(j, j + 2);
           if (codeDay == weekdayUpper) {
-            if (!countOnly)
-              dayEvents.push_back(calendarEvents[i]);
+            if (!countOnly) dayEvents.push_back(calendarEvents[i]);
             eventCount++;
             break;
           }
@@ -670,8 +653,7 @@ int checkEvents(String YYYYMMDD, bool countOnly = false) {
 
         // Monthly on specific date (e.g. 10)
         if (monthlyCode == dayStr) {
-          if (!countOnly)
-            dayEvents.push_back(calendarEvents[i]);
+          if (!countOnly) dayEvents.push_back(calendarEvents[i]);
           eventCount++;
           continue;
         }
@@ -683,8 +665,7 @@ int checkEvents(String YYYYMMDD, bool countOnly = false) {
           codeWeekday.toUpperCase();
 
           if (nth == nthWeekday && codeWeekday == weekdayUpper) {
-            if (!countOnly)
-              dayEvents.push_back(calendarEvents[i]);
+            if (!countOnly) dayEvents.push_back(calendarEvents[i]);
             eventCount++;
             continue;
           }
@@ -696,8 +677,7 @@ int checkEvents(String YYYYMMDD, bool countOnly = false) {
         String yearlyCode = repeatCode.substring(7);
         yearlyCode.toUpperCase();
         if (yearlyCode == dateCode) {
-          if (!countOnly)
-            dayEvents.push_back(calendarEvents[i]);
+          if (!countOnly) dayEvents.push_back(calendarEvents[i]);
           eventCount++;
           continue;
         }
@@ -707,46 +687,39 @@ int checkEvents(String YYYYMMDD, bool countOnly = false) {
 
   // Sort by start time (HH:MM to minutes)
   if (!countOnly) {
-    std::sort(dayEvents.begin(), dayEvents.end(),
-              [](const std::vector<String>& a, const std::vector<String>& b) {
-                String aTime = a[2];
-                String bTime = b[2];
+    std::sort(dayEvents.begin(), dayEvents.end(), [](const std::vector<String>& a, const std::vector<String>& b) {
+      String aTime = a[2];
+      String bTime = b[2];
 
-                int aMin = aTime.substring(0, 2).toInt() * 60 + aTime.substring(3, 5).toInt();
-                int bMin = bTime.substring(0, 2).toInt() * 60 + bTime.substring(3, 5).toInt();
+      int aMin = aTime.substring(0, 2).toInt() * 60 + aTime.substring(3, 5).toInt();
+      int bMin = bTime.substring(0, 2).toInt() * 60 + bTime.substring(3, 5).toInt();
 
-                return aMin < bMin;
-              });
+      return aMin < bMin;
+    });
   }
 
   return eventCount;
 }
 
 void drawCalendarMonth(int monthOffset) {
-  int GRID_X = 7;   // X offset of first cell
-  int GRID_Y = 49;  // Y offset of first row
-  int CELL_W = 44;  // Width of each cell
-  int CELL_H = 27;  // Height of each cell
+  int GRID_X =  7;     // X offset of first cell
+  int GRID_Y = 49;     // Y offset of first row
+  int CELL_W = 44;     // Width of each cell
+  int CELL_H = 27;     // Height of each cell
 
   DateTime now = CLOCK().nowDT();
 
   // Step 1: Calculate target month/year
   int month = now.month() + monthOffset;
   int year = now.year();
-  while (month > 12) {
-    month -= 12;
-    year++;
-  }
-  while (month < 1) {
-    month += 12;
-    year--;
-  }
+  while (month > 12) { month -= 12; year++; }
+  while (month < 1)  { month += 12; year--; }
 
   currentMonth = month;
   currentYear = year;
 
   // Draw Background
-  EINK().drawStatusBar(getMonthName(currentMonth) + " " + String(currentYear) + " | Type a Date:");
+  EINK().drawStatusBar(getMonthName(currentMonth) + " " + String(currentYear)+ " | Type a Date:");
   display.drawBitmap(0, 0, calendar_allArray[1], 320, 218, GxEPD_BLACK);
 
   // Step 2: Day of the week for the 1st of the month (0 = Sun, 6 = Sat)
@@ -754,7 +727,7 @@ void drawCalendarMonth(int monthOffset) {
   int startDay = firstDay.dayOfTheWeek();  // 0–6, Sun to Sat
 
   // Step 3: Number of days in the month
-  int nextYear = (month == 12) ? (year + 1) : year;
+  int nextYear  = (month == 12) ? (year + 1) : year;
   int nextMonth = (month == 12) ? 1 : (month + 1);
 
   int daysInMonth = (DateTime(nextYear, nextMonth, 1) - DateTime(year, month, 1)).days();
@@ -778,7 +751,7 @@ void drawCalendarMonth(int monthOffset) {
   }
   // Step 6: Draw day numbers and events
   for (int i = 0; i < daysInMonth; ++i) {
-    int dayIndex = i + startDay;  // total box index in the 7x6 grid
+    int dayIndex = i + startDay;     // total box index in the 7x6 grid
     int row = dayIndex / 7;
     int col = dayIndex % 7;
 
@@ -789,12 +762,12 @@ void drawCalendarMonth(int monthOffset) {
 
     // Current day
     if (dayNum == now.day() && monthOffset == 0) {
-      display.setFont(&FreeSerifBold9pt8b);
-    } else
-      display.setFont(&FreeSerif9pt8b);
-
+      display.setFont(&FreeSerifBold9pt7b);
+    }
+    else display.setFont(&FreeSerif9pt7b);
+    
     display.setTextColor(GxEPD_BLACK);
-    display.setCursor(x + 6, y + 15);
+    display.setCursor(x + 6, y + 15); 
     display.print(dayNum);
 
     // Draw icon if there are events on day
@@ -814,10 +787,12 @@ void drawCalendarMonth(int monthOffset) {
       display.setFont(&Font5x7Fixed);
       display.setCursor(x + 32, y + 16);
       display.print(String(numEvents));
-    } else if (numEvents > 1) {
+    }
+    else if (numEvents > 1) {
       // More than 1 event
       display.drawBitmap(x + 29, y + 8, _eventMarker1, 10, 10, GxEPD_BLACK);
-    } else if (numEvents > 0) {
+    }
+    else if (numEvents > 0) {
       // One event exists
       display.drawBitmap(x + 29, y + 8, _eventMarker0, 10, 10, GxEPD_BLACK);
     }
@@ -872,7 +847,7 @@ void drawCalendarWeek(int weekOffset) {
                       (d < 10 ? "0" : "") + String(d);*/
 
     // Draw date
-    display.setFont(&FreeSerif9pt8b);
+    display.setFont(&FreeSerif9pt7b);
     display.setTextColor(GxEPD_BLACK);
     display.setCursor(9 + (i * 44), 62);
     String dateStr = String(m) + "/" + String(d);
@@ -880,18 +855,15 @@ void drawCalendarWeek(int weekOffset) {
 
     // Load and draw events
     int eventCount = checkEvents(YYYYMMDD, false);
-    if (eventCount > 6)
-      eventCount = 6;
+    if (eventCount > 6) eventCount = 6;
 
     // Blank out extra space
-    display.fillRect(9 + (i * 44), 71 + (eventCount * 23), 39, ((6 - eventCount) * 23),
-                     GxEPD_WHITE);
+    display.fillRect(9 + (i * 44), 71 + (eventCount * 23), 39, ((6 - eventCount) * 23), GxEPD_WHITE);
 
     for (int j = 0; j < eventCount; j++) {
       String startTime = dayEvents[j][2];
       // Indicator for repeat events
-      if (dayEvents[j][4] != "NO")
-        startTime = ":: " + startTime;
+      if (dayEvents[j][4] != "NO") startTime = ":: " + startTime;
       String eventName = dayEvents[j][0].substring(0, 6);
 
       // Print Start Time
@@ -915,22 +887,21 @@ void processKB_CALENDAR() {
 
   switch (CurrentCalendarState) {
     case MONTH:
-      if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
+      if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {  
         char inchar = KB().updateKeypress();
         // HANDLE INPUTS
-        // No char recieved
-        if (inchar == 0)
-          ;
+        //No char recieved
+        if (inchar == 0);  
         // HOME Recieved
         else if (inchar == 12) {
           HOME_INIT();
-        }
-        // CR Recieved
-        else if (inchar == 13) {
+        }  
+        //CR Recieved
+        else if (inchar == 13) {                          
           commandSelectMonth(currentLine);
           currentLine = "";
-        }
-        // SHIFT Recieved
+        }                                      
+        //SHIFT Recieved
         else if (inchar == 17) {
           if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) {
             KB().setKeyboardState(NORMAL);
@@ -950,12 +921,12 @@ void processKB_CALENDAR() {
             KB().setKeyboardState(FUNC);
           }
         }
-        // Space Recieved
-        else if (inchar == 32) {
+        //Space Recieved
+        else if (inchar == 32) {                                  
           currentLine += " ";
         }
-        // BKSP Recieved
-        else if (inchar == 8) {
+        //BKSP Recieved
+        else if (inchar == 8) {                  
           if (currentLine.length() > 0) {
             currentLine.remove(currentLine.length() - 1);
           }
@@ -977,60 +948,55 @@ void processKB_CALENDAR() {
           newState = true;
           delay(200);
           break;
-        } else {
+        }
+        else {
           currentLine += inchar;
-          if (inchar >= 48 && inchar <= 57) {
-          }  // Only leave FN on if typing numbers
+          if (inchar >= 48 && inchar <= 57) {}  //Only leave FN on if typing numbers
           else if (KB().getKeyboardState() != NORMAL) {
             KB().setKeyboardState(NORMAL);
           }
         }
 
         currentMillis = millis();
-        // Make sure oled only updates at OLED_MAX_FPS
-        if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
+        //Make sure oled only updates at OLED_MAX_FPS
+        if (currentMillis - OLEDFPSMillis >= (1000/OLED_MAX_FPS)) {
           OLEDFPSMillis = currentMillis;
           OLED().oledLine(currentLine, currentLine.length(), false);
         }
       }
       break;
     case WEEK:
-      if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
+      if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {  
         char inchar = KB().updateKeypress();
         // HANDLE INPUTS
-        // No char recieved
-        if (inchar == 0)
-          ;
+        //No char recieved
+        if (inchar == 0);  
         // HOME Recieved
         else if (inchar == 12) {
           HOME_INIT();
-        }
-        // CR Recieved
-        else if (inchar == 13) {
-          // commandSelectMonth(currentLine);
+        }  
+        //CR Recieved
+        else if (inchar == 13) {                          
+          //commandSelectMonth(currentLine);
           commandSelectWeek(currentLine);
           currentLine = "";
+        }                                      
+        //SHIFT Recieved
+        else if (inchar == 17) {                                  
+          if (KB().getKeyboardState() == SHIFT) KB().setKeyboardState(NORMAL);
+          else KB().setKeyboardState(SHIFT);
         }
-        // SHIFT Recieved
-        else if (inchar == 17) {
-          if (KB().getKeyboardState() == SHIFT)
-            KB().setKeyboardState(NORMAL);
-          else
-            KB().setKeyboardState(SHIFT);
+        //FN Recieved
+        else if (inchar == 18) {                                  
+          if (KB().getKeyboardState() == FUNC) KB().setKeyboardState(NORMAL);
+          else KB().setKeyboardState(FUNC);
         }
-        // FN Recieved
-        else if (inchar == 18) {
-          if (KB().getKeyboardState() == FUNC)
-            KB().setKeyboardState(NORMAL);
-          else
-            KB().setKeyboardState(FUNC);
-        }
-        // Space Recieved
-        else if (inchar == 32) {
+        //Space Recieved
+        else if (inchar == 32) {                                  
           currentLine += " ";
         }
-        // BKSP Recieved
-        else if (inchar == 8) {
+        //BKSP Recieved
+        else if (inchar == 8) {                  
           if (currentLine.length() > 0) {
             currentLine.remove(currentLine.length() - 1);
           }
@@ -1052,43 +1018,42 @@ void processKB_CALENDAR() {
           newState = true;
           delay(200);
           break;
-        } else {
+        }
+        else {
           currentLine += inchar;
-          if (inchar >= 48 && inchar <= 57) {
-          }  // Only leave FN on if typing numbers
+          if (inchar >= 48 && inchar <= 57) {}  //Only leave FN on if typing numbers
           else if (KB().getKeyboardState() != NORMAL) {
             KB().setKeyboardState(NORMAL);
           }
         }
 
         currentMillis = millis();
-        // Make sure oled only updates at OLED_MAX_FPS
-        if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
+        //Make sure oled only updates at OLED_MAX_FPS
+        if (currentMillis - OLEDFPSMillis >= (1000/OLED_MAX_FPS)) {
           OLEDFPSMillis = currentMillis;
           OLED().oledLine(currentLine, currentLine.length(), false);
         }
       }
       break;
     case NEW_EVENT:
-      if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
+      if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {  
         char inchar = KB().updateKeypress();
         // HANDLE INPUTS
-        // No char recieved
-        if (inchar == 0)
-          ;
+        //No char recieved
+        if (inchar == 0);  
         // HOME Recieved
         else if (inchar == 12) {
           newEventState--;
           currentLine = "";
           if (newEventState < 0) {
             CurrentCalendarState = MONTH;
-            currentLine = "";
-            newState = true;
+            currentLine     = "";
+            newState        = true;
             KB().setKeyboardState(NORMAL);
           }
-        }
-        // CR Recieved
-        else if (inchar == 13) {
+        }  
+        //CR Recieved
+        else if (inchar == 13) {                          
           switch (newEventState) {
             case 0:
               // Event Name: must be non-empty
@@ -1135,7 +1100,8 @@ void processKB_CALENDAR() {
               // Duration: must be H:MM or HH:MM
               {
                 int colonIdx = currentLine.indexOf(':');
-                if ((colonIdx == 1 || colonIdx == 2) && isDigit(currentLine.charAt(0)) &&
+                if ((colonIdx == 1 || colonIdx == 2) &&
+                    isDigit(currentLine.charAt(0)) &&
                     isDigit(currentLine.charAt(colonIdx + 1)) &&
                     isDigit(currentLine.charAt(colonIdx + 2))) {
                   newEventDuration = currentLine;
@@ -1159,8 +1125,10 @@ void processKB_CALENDAR() {
                   OLED().oledWord("Help screen coming soon!");
                   delay(5000);
                   currentLine = "";
-                } else if (code == "NO" || code == "DAILY" || code.startsWith("WEEKLY ") ||
-                           code.startsWith("MONTHLY ") || code.startsWith("YEARLY ")) {
+                } else if (code == "NO" || code == "DAILY" ||
+                    code.startsWith("WEEKLY ") ||
+                    code.startsWith("MONTHLY ") ||
+                    code.startsWith("YEARLY ")) {
                   newEventRepeat = code;
                   newEventState++;
                   currentLine = "";
@@ -1182,8 +1150,14 @@ void processKB_CALENDAR() {
 
           if (newEventState > 5) {
             // Create Event
-            addEvent(newEventName, newEventStartDate, newEventStartTime, newEventDuration,
-                     newEventRepeat, newEventNote);
+            addEvent( 
+                      newEventName, 
+                      newEventStartDate, 
+                      newEventStartTime, 
+                      newEventDuration, 
+                      newEventRepeat, 
+                      newEventNote 
+                    );
             // Return to app
             OLED().oledWord("New Event \"" + newEventName + "\" Created");
             delay(2000);
@@ -1191,118 +1165,115 @@ void processKB_CALENDAR() {
             KB().setKeyboardState(NORMAL);
           }
           newState = true;
+        }                                      
+        //SHIFT Recieved
+        else if (inchar == 17) {                                  
+          if (KB().getKeyboardState() == SHIFT) KB().setKeyboardState(NORMAL);
+          else KB().setKeyboardState(SHIFT);
         }
-        // SHIFT Recieved
-        else if (inchar == 17) {
-          if (KB().getKeyboardState() == SHIFT)
-            KB().setKeyboardState(NORMAL);
-          else
-            KB().setKeyboardState(SHIFT);
+        //FN Recieved
+        else if (inchar == 18) {                                  
+          if (KB().getKeyboardState() == FUNC) KB().setKeyboardState(NORMAL);
+          else KB().setKeyboardState(FUNC);
         }
-        // FN Recieved
-        else if (inchar == 18) {
-          if (KB().getKeyboardState() == FUNC)
-            KB().setKeyboardState(NORMAL);
-          else
-            KB().setKeyboardState(FUNC);
-        }
-        // Space Recieved
-        else if (inchar == 32) {
+        //Space Recieved
+        else if (inchar == 32) {                                  
           currentLine += " ";
         }
-        // BKSP Recieved
-        else if (inchar == 8) {
+        //BKSP Recieved
+        else if (inchar == 8) {                  
           if (currentLine.length() > 0) {
             currentLine.remove(currentLine.length() - 1);
           }
-        } else {
+        }
+        else {
           currentLine += inchar;
-          if (inchar >= 48 && inchar <= 57) {
-          }  // Only leave FN on if typing numbers
+          if (inchar >= 48 && inchar <= 57) {}  //Only leave FN on if typing numbers
           else if (KB().getKeyboardState() != NORMAL) {
             KB().setKeyboardState(NORMAL);
           }
         }
 
         currentMillis = millis();
-        // Make sure oled only updates at OLED_MAX_FPS
-        if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
+        //Make sure oled only updates at OLED_MAX_FPS
+        if (currentMillis - OLEDFPSMillis >= (1000/OLED_MAX_FPS)) {
           OLEDFPSMillis = currentMillis;
-          switch (newEventState) {
+          switch(newEventState) {
             case 0:
               OLED().oledLine(currentLine, currentLine.length(), false, "Enter the Event Name");
               break;
             case 1:
-              OLED().oledLine(currentLine, currentLine.length(), false,
-                              "Enter the Start Date (YYYYMMDD)");
+              OLED().oledLine(currentLine, currentLine.length(), false, "Enter the Start Date (YYYYMMDD)");
               break;
             case 2:
-              OLED().oledLine(currentLine, currentLine.length(), false,
-                              "Enter the Start Time (HH:MM)");
+              OLED().oledLine(currentLine, currentLine.length(), false, "Enter the Start Time (HH:MM)");
               break;
             case 3:
-              OLED().oledLine(currentLine, currentLine.length(), false,
-                              "Enter the Event Duration (HH:MM)");
+              OLED().oledLine(currentLine, currentLine.length(), false, "Enter the Event Duration (HH:MM)");
               break;
             case 4:
-              OLED().oledLine(currentLine, currentLine.length(), false,
-                              "Enter the Repeat Code or \"Help\"");
+              OLED().oledLine(currentLine, currentLine.length(), false, "Enter the Repeat Code or \"Help\"");
               break;
             case 5:
-              OLED().oledLine(currentLine, currentLine.length(), false,
-                              "Attach a Note to the Event");
+              OLED().oledLine(currentLine, currentLine.length(), false, "Attach a Note to the Event");
               break;
           }
         }
       }
       break;
     case VIEW_EVENT:
-      if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
+      if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {  
         char inchar = KB().updateKeypress();
         // HANDLE INPUTS
-        // No char recieved
-        if (inchar == 0)
-          ;
+        //No char recieved
+        if (inchar == 0);  
         // HOME Recieved
         else if (inchar == 12) {
           CurrentCalendarState = MONTH;
-          currentLine = "";
-          newState = true;
+          currentLine     = "";
+          newState        = true;
           KB().setKeyboardState(NORMAL);
-        }
-        // CR Recieved
-        else if (inchar == 13) {
+        }  
+        //CR Recieved
+        else if (inchar == 13) {                          
           switch (newEventState) {
             case -1:
               if (currentLine == "1") {
                 newEventState = 0;
-              } else if (currentLine == "2") {
+              }
+              else if (currentLine == "2") {
                 newEventState = 1;
-              } else if (currentLine == "3") {
+              }
+              else if (currentLine == "3") {
                 newEventState = 2;
-              } else if (currentLine == "4") {
+              }
+              else if (currentLine == "4") {
                 newEventState = 3;
-              } else if (currentLine == "5") {
+              }
+              else if (currentLine == "5") {
                 newEventState = 4;
-              } else if (currentLine == "6") {
+              }
+              else if (currentLine == "6") {
                 newEventState = 5;
-              } else if (currentLine == "d" || currentLine == "D") {
+              }
+              else if (currentLine == "d" || currentLine == "D") {
                 deleteEventByIndex(editingEventIndex);
                 updateEventsFile();
                 OLED().oledWord("Event : \"" + newEventName + "\" Deleted");
                 delay(2000);
                 CurrentCalendarState = MONTH;
-                currentLine = "";
-                newState = true;
+                currentLine     = "";
+                newState        = true;
                 KB().setKeyboardState(NORMAL);
-              } else if (currentLine == "s" || currentLine == "S") {
+              }
+              else if (currentLine == "s" || currentLine == "S") {
                 updateEventByIndex(editingEventIndex);
                 updateEventsFile();
                 OLED().oledWord("Event : \"" + newEventName + "\" Edited");
                 delay(2000);
                 CurrentCalendarState = MONTH;
-                currentLine = "";
-                newState = true;
+                currentLine     = "";
+                newState        = true;
                 KB().setKeyboardState(NORMAL);
               }
               currentLine = "";
@@ -1352,7 +1323,8 @@ void processKB_CALENDAR() {
               // Duration: must be H:MM or HH:MM
               {
                 int colonIdx = currentLine.indexOf(':');
-                if ((colonIdx == 1 || colonIdx == 2) && isDigit(currentLine.charAt(0)) &&
+                if ((colonIdx == 1 || colonIdx == 2) &&
+                    isDigit(currentLine.charAt(0)) &&
                     isDigit(currentLine.charAt(colonIdx + 1)) &&
                     isDigit(currentLine.charAt(colonIdx + 2))) {
                   newEventDuration = currentLine;
@@ -1376,8 +1348,10 @@ void processKB_CALENDAR() {
                   OLED().oledWord("Help screen coming soon!");
                   delay(5000);
                   currentLine = "";
-                } else if (code == "NO" || code == "DAILY" || code.startsWith("WEEKLY ") ||
-                           code.startsWith("MONTHLY ") || code.startsWith("YEARLY ")) {
+                } else if (code == "NO" || code == "DAILY" ||
+                    code.startsWith("WEEKLY ") ||
+                    code.startsWith("MONTHLY ") ||
+                    code.startsWith("YEARLY ")) {
                   newEventRepeat = code;
                   currentLine = "";
                   newEventState = -1;
@@ -1399,8 +1373,14 @@ void processKB_CALENDAR() {
 
           if (newEventState > 5) {
             // Create Event
-            addEvent(newEventName, newEventStartDate, newEventStartTime, newEventDuration,
-                     newEventRepeat, newEventNote);
+            addEvent( 
+                      newEventName, 
+                      newEventStartDate, 
+                      newEventStartTime, 
+                      newEventDuration, 
+                      newEventRepeat, 
+                      newEventNote 
+                    );
             // Return to app
             OLED().oledWord("New Event \"" + newEventName + "\" Created");
             delay(2000);
@@ -1408,44 +1388,40 @@ void processKB_CALENDAR() {
             KB().setKeyboardState(NORMAL);
           }
           newState = true;
+        }                                      
+        //SHIFT Recieved
+        else if (inchar == 17) {                                  
+          if (KB().getKeyboardState() == SHIFT) KB().setKeyboardState(NORMAL);
+          else KB().setKeyboardState(SHIFT);
         }
-        // SHIFT Recieved
-        else if (inchar == 17) {
-          if (KB().getKeyboardState() == SHIFT)
-            KB().setKeyboardState(NORMAL);
-          else
-            KB().setKeyboardState(SHIFT);
+        //FN Recieved
+        else if (inchar == 18) {                                  
+          if (KB().getKeyboardState() == FUNC) KB().setKeyboardState(NORMAL);
+          else KB().setKeyboardState(FUNC);
         }
-        // FN Recieved
-        else if (inchar == 18) {
-          if (KB().getKeyboardState() == FUNC)
-            KB().setKeyboardState(NORMAL);
-          else
-            KB().setKeyboardState(FUNC);
-        }
-        // Space Recieved
-        else if (inchar == 32) {
+        //Space Recieved
+        else if (inchar == 32) {                                  
           currentLine += " ";
         }
-        // BKSP Recieved
-        else if (inchar == 8) {
+        //BKSP Recieved
+        else if (inchar == 8) {                  
           if (currentLine.length() > 0) {
             currentLine.remove(currentLine.length() - 1);
           }
-        } else {
+        }
+        else {
           currentLine += inchar;
-          if (inchar >= 48 && inchar <= 57) {
-          }  // Only leave FN on if typing numbers
+          if (inchar >= 48 && inchar <= 57) {}  //Only leave FN on if typing numbers
           else if (KB().getKeyboardState() != NORMAL) {
             KB().setKeyboardState(NORMAL);
           }
         }
 
         currentMillis = millis();
-        // Make sure oled only updates at OLED_MAX_FPS
-        if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
+        //Make sure oled only updates at OLED_MAX_FPS
+        if (currentMillis - OLEDFPSMillis >= (1000/OLED_MAX_FPS)) {
           OLEDFPSMillis = currentMillis;
-          switch (newEventState) {
+          switch(newEventState) {
             case -1:
               OLED().oledLine(currentLine, currentLine.length(), false);
               break;
@@ -1453,24 +1429,19 @@ void processKB_CALENDAR() {
               OLED().oledLine(currentLine, currentLine.length(), false, "Enter the Event Name");
               break;
             case 1:
-              OLED().oledLine(currentLine, currentLine.length(), false,
-                              "Enter the Start Date (YYYYMMDD)");
+              OLED().oledLine(currentLine, currentLine.length(), false, "Enter the Start Date (YYYYMMDD)");
               break;
             case 2:
-              OLED().oledLine(currentLine, currentLine.length(), false,
-                              "Enter the Start Time (HH:MM)");
+              OLED().oledLine(currentLine, currentLine.length(), false, "Enter the Start Time (HH:MM)");
               break;
             case 3:
-              OLED().oledLine(currentLine, currentLine.length(), false,
-                              "Enter the Event Duration (HH:MM)");
+              OLED().oledLine(currentLine, currentLine.length(), false, "Enter the Event Duration (HH:MM)");
               break;
             case 4:
-              OLED().oledLine(currentLine, currentLine.length(), false,
-                              "Enter the Repeat Code or \"Help\"");
+              OLED().oledLine(currentLine, currentLine.length(), false, "Enter the Repeat Code or \"Help\"");
               break;
             case 5:
-              OLED().oledLine(currentLine, currentLine.length(), false,
-                              "Attach a Note to the Event");
+              OLED().oledLine(currentLine, currentLine.length(), false, "Attach a Note to the Event");
               break;
           }
         }
@@ -1483,49 +1454,44 @@ void processKB_CALENDAR() {
     case THU:
     case FRI:
     case SAT:
-      if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
+      if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {  
         char inchar = KB().updateKeypress();
         // HANDLE INPUTS
-        // No char recieved
-        if (inchar == 0)
-          ;
+        //No char recieved
+        if (inchar == 0);  
         // HOME Recieved
         else if (inchar == 12) {
           CurrentCalendarState = MONTH;
-          currentLine = "";
-          newState = true;
+          currentLine     = "";
+          newState        = true;
           KB().setKeyboardState(NORMAL);
-        }
-        // CR Recieved
-        else if (inchar == 13) {
+        }  
+        //CR Recieved
+        else if (inchar == 13) {                          
           commandSelectDay(currentLine);
           currentLine = "";
+        }                                      
+        //SHIFT Recieved
+        else if (inchar == 17) {                                  
+          if (KB().getKeyboardState() == SHIFT) KB().setKeyboardState(NORMAL);
+          else KB().setKeyboardState(SHIFT);
         }
-        // SHIFT Recieved
-        else if (inchar == 17) {
-          if (KB().getKeyboardState() == SHIFT)
-            KB().setKeyboardState(NORMAL);
-          else
-            KB().setKeyboardState(SHIFT);
+        //FN Recieved
+        else if (inchar == 18) {                                  
+          if (KB().getKeyboardState() == FUNC) KB().setKeyboardState(NORMAL);
+          else KB().setKeyboardState(FUNC);
         }
-        // FN Recieved
-        else if (inchar == 18) {
-          if (KB().getKeyboardState() == FUNC)
-            KB().setKeyboardState(NORMAL);
-          else
-            KB().setKeyboardState(FUNC);
-        }
-        // Space Recieved
-        else if (inchar == 32) {
+        //Space Recieved
+        else if (inchar == 32) {                                  
           currentLine += " ";
         }
-        // BKSP Recieved
-        else if (inchar == 8) {
+        //BKSP Recieved
+        else if (inchar == 8) {                  
           if (currentLine.length() > 0) {
             currentLine.remove(currentLine.length() - 1);
           }
         }
-
+        
         // LEFT Received
         else if (inchar == 19) {
           // Go back one day
@@ -1541,27 +1507,13 @@ void processKB_CALENDAR() {
 
           int dayOfWeek = getDayOfWeek(currentYear, currentMonth, currentDate);
           switch (dayOfWeek) {
-            case 0:
-              CurrentCalendarState = SUN;
-              break;
-            case 1:
-              CurrentCalendarState = MON;
-              break;
-            case 2:
-              CurrentCalendarState = TUE;
-              break;
-            case 3:
-              CurrentCalendarState = WED;
-              break;
-            case 4:
-              CurrentCalendarState = THU;
-              break;
-            case 5:
-              CurrentCalendarState = FRI;
-              break;
-            case 6:
-              CurrentCalendarState = SAT;
-              break;
+            case 0: CurrentCalendarState = SUN; break;
+            case 1: CurrentCalendarState = MON; break;
+            case 2: CurrentCalendarState = TUE; break;
+            case 3: CurrentCalendarState = WED; break;
+            case 4: CurrentCalendarState = THU; break;
+            case 5: CurrentCalendarState = FRI; break;
+            case 6: CurrentCalendarState = SAT; break;
           }
 
           newState = true;
@@ -1583,27 +1535,13 @@ void processKB_CALENDAR() {
 
           int dayOfWeek = getDayOfWeek(currentYear, currentMonth, currentDate);
           switch (dayOfWeek) {
-            case 0:
-              CurrentCalendarState = SUN;
-              break;
-            case 1:
-              CurrentCalendarState = MON;
-              break;
-            case 2:
-              CurrentCalendarState = TUE;
-              break;
-            case 3:
-              CurrentCalendarState = WED;
-              break;
-            case 4:
-              CurrentCalendarState = THU;
-              break;
-            case 5:
-              CurrentCalendarState = FRI;
-              break;
-            case 6:
-              CurrentCalendarState = SAT;
-              break;
+            case 0: CurrentCalendarState = SUN; break;
+            case 1: CurrentCalendarState = MON; break;
+            case 2: CurrentCalendarState = TUE; break;
+            case 3: CurrentCalendarState = WED; break;
+            case 4: CurrentCalendarState = THU; break;
+            case 5: CurrentCalendarState = FRI; break;
+            case 6: CurrentCalendarState = SAT; break;
           }
 
           newState = true;
@@ -1616,23 +1554,24 @@ void processKB_CALENDAR() {
           newState = true;
           delay(200);
           break;
-        } else {
+        }
+        else {
           currentLine += inchar;
-          if (inchar >= 48 && inchar <= 57) {
-          }  // Only leave FN on if typing numbers
+          if (inchar >= 48 && inchar <= 57) {}  //Only leave FN on if typing numbers
           else if (KB().getKeyboardState() != NORMAL) {
             KB().setKeyboardState(NORMAL);
           }
         }
 
         currentMillis = millis();
-        // Make sure oled only updates at OLED_MAX_FPS
-        if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
+        //Make sure oled only updates at OLED_MAX_FPS
+        if (currentMillis - OLEDFPSMillis >= (1000/OLED_MAX_FPS)) {
           OLEDFPSMillis = currentMillis;
           OLED().oledLine(currentLine, currentLine.length(), false);
         }
       }
       break;
+
   }
 }
 
@@ -1648,7 +1587,7 @@ void einkHandler_CALENDAR() {
 
         EINK().forceSlowFullUpdate(true);
         EINK().refresh();
-        // EINK().multiPassRefresh(2);
+        //EINK().multiPassRefresh(2);
       }
       break;
     case MONTH:
@@ -1661,7 +1600,7 @@ void einkHandler_CALENDAR() {
 
         EINK().forceSlowFullUpdate(true);
         EINK().refresh();
-        // EINK().multiPassRefresh(2);
+        //EINK().multiPassRefresh(2);
       }
       break;
     case NEW_EVENT:
@@ -1671,7 +1610,7 @@ void einkHandler_CALENDAR() {
 
         display.drawBitmap(0, 0, calendar_allArray[2], 320, 218, GxEPD_BLACK);
 
-        display.setFont(&FreeSerif9pt8b);
+        display.setFont(&FreeSerif9pt7b);
 
         display.setCursor(106, 68);
         display.print(newEventName);
@@ -1684,7 +1623,7 @@ void einkHandler_CALENDAR() {
 
         display.setCursor(106, 134);
         display.print(newEventDuration);
-
+        
         display.setCursor(106, 156);
         display.print(newEventRepeat);
 
@@ -1700,7 +1639,7 @@ void einkHandler_CALENDAR() {
         newState = false;
         EINK().resetDisplay();
 
-        switch (newEventState) {
+        switch(newEventState) {
           case -1:
             EINK().drawStatusBar("Type 1-6,(D)elete,or (S)ave");
             break;
@@ -1710,7 +1649,7 @@ void einkHandler_CALENDAR() {
         }
         display.drawBitmap(0, 0, calendar_allArray[3], 320, 218, GxEPD_BLACK);
 
-        display.setFont(&FreeSerif9pt8b);
+        display.setFont(&FreeSerif9pt7b);
 
         display.setCursor(106, 68);
         display.print(newEventName);
@@ -1723,7 +1662,7 @@ void einkHandler_CALENDAR() {
 
         display.setCursor(106, 134);
         display.print(newEventDuration);
-
+        
         display.setCursor(106, 156);
         display.print(newEventRepeat);
 
@@ -1753,29 +1692,27 @@ void einkHandler_CALENDAR() {
         display.drawBitmap(0, 0, calendar_allArray[CurrentCalendarState], 320, 218, GxEPD_BLACK);
 
         // Draw Date
-        display.setFont(&FreeSerif9pt8b);
+        display.setFont(&FreeSerif9pt7b);
         display.setTextColor(GxEPD_BLACK);
         // Set cursor based on the day of the week
-        display.setCursor(9 + (44 * (CurrentCalendarState - 4)), 59);
+        display.setCursor(9 + (44*(CurrentCalendarState - 4)), 59);
         display.print(String(currentMonth) + "/" + String(currentDate));
 
         // Load events
         String YYYYMMDD = intToYYYYMMDD(currentYear, currentMonth, currentDate);
         int eventCount = checkEvents(YYYYMMDD, false);
-        if (eventCount > 7)
-          eventCount = 7;
+        if (eventCount > 7) eventCount = 7;
 
         // Blank out extra space
         display.fillRect(12, 66 + (eventCount * 19), 297, ((7 - eventCount) * 19), GxEPD_WHITE);
-
+        
         // Display events data
         for (int j = 0; j < eventCount; j++) {
-          String name = dayEvents[j][0];
-          String startTime = dayEvents[j][2];
-          String duration = dayEvents[j][3];
+          String name       = dayEvents[j][0];
+          String startTime  = dayEvents[j][2];
+          String duration   = dayEvents[j][3];
           String repeatCode = dayEvents[j][4];
-          String bottomInfo =
-              "Starts: " + startTime + ", Dur: " + duration + ", Rep: " + repeatCode;
+          String bottomInfo = "Starts: " + startTime + ", Dur: " + duration + ", Rep: " + repeatCode;
 
           // Print event name
           display.setFont(&Font5x7Fixed);
@@ -1790,7 +1727,7 @@ void einkHandler_CALENDAR() {
 
         EINK().forceSlowFullUpdate(true);
         EINK().refresh();
-        // EINK().multiPassRefresh(2);
+        //EINK().multiPassRefresh(2);
       }
       break;
   }

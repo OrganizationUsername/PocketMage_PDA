@@ -1,5 +1,5 @@
 #include <globals.h>
-#if !OTA_APP  // POCKETMAGE_OS
+#if !OTA_APP // POCKETMAGE_OS
 enum SettingsState { settings0, settings1 };
 SettingsState CurrentSettingsState = settings0;
 
@@ -23,12 +23,13 @@ String settingCommandSelect(String command) {
     String timePart = command.substring(8);
     CLOCK().setTimeFromString(timePart);
     return returnText;
-  } else if (command.startsWith("dateset ") || command.startsWith("setdate ")) {
+  }
+  else if (command.startsWith("dateset ") || command.startsWith("setdate ")) {
     String datePart = command.substring(8);
     if (datePart.length() == 8 && datePart.toInt() > 0) {
-      int year = datePart.substring(0, 4).toInt();
+      int year  = datePart.substring(0, 4).toInt();
       int month = datePart.substring(4, 6).toInt();
-      int day = datePart.substring(6, 8).toInt();
+      int day   = datePart.substring(6, 8).toInt();
 
       DateTime now = CLOCK().nowDT();  // Preserve current time
       CLOCK().getRTC().adjust(DateTime(year, month, day, now.hour(), now.minute(), now.second()));
@@ -36,16 +37,16 @@ String settingCommandSelect(String command) {
       returnText = "Invalid format (use YYYYMMDD)";
     }
     return returnText;
-  } else if (command.startsWith("lumina ")) {
+  }
+  else if (command.startsWith("lumina ")) {
     String luminaPart = command.substring(7);
     int lumina = stringToInt(luminaPart);
     if (lumina == -1) {
       returnText = "Invalid";
       return returnText;
-    } else if (lumina > 255)
-      lumina = 255;
-    else if (lumina < 0)
-      lumina = 0;
+    }
+    else if (lumina > 255) lumina = 255;
+    else if (lumina < 0) lumina = 0;
     OLED_BRIGHTNESS = lumina;
     u8g2.setContrast(OLED_BRIGHTNESS);
     prefs.begin("PocketMage", false);
@@ -54,15 +55,13 @@ String settingCommandSelect(String command) {
     newState = true;
     returnText = "Settings Updated";
     return returnText;
-  } else if (command.startsWith("timeout ")) {
+  }
+  else if (command.startsWith("timeout ")) {
     String timeoutPart = command.substring(8);
     int timeout = stringToInt(timeoutPart);
-    if (timeout == -1)
-      return "Invalid!";
-    else if (timeout > 3600)
-      timeout = 3600;
-    else if (timeout < 15)
-      timeout = 15;
+    if (timeout == -1) return "Invalid!";
+    else if (timeout > 3600) timeout = 3600;
+    else if (timeout < 15) timeout = 15;
     TIMEOUT = timeout;
     prefs.begin("PocketMage", false);
     prefs.putInt("TIMEOUT", TIMEOUT);
@@ -70,16 +69,16 @@ String settingCommandSelect(String command) {
     newState = true;
     returnText = "Settings Updated";
     return returnText;
-  } else if (command.startsWith("oledfps ")) {
+  }
+  else if (command.startsWith("oledfps ")) {
     String oledfpsPart = command.substring(8);
     int oledfps = stringToInt(oledfpsPart);
     if (oledfps == -1) {
       returnText = "Invalid";
       return returnText;
-    } else if (oledfps > 144)
-      oledfps = 144;
-    else if (oledfps < 5)
-      oledfps = 5;
+    }
+    else if (oledfps > 144) oledfps = 144;
+    else if (oledfps < 5) oledfps = 5;
     OLED_MAX_FPS = oledfps;
     prefs.begin("PocketMage", false);
     prefs.putInt("OLED_MAX_FPS", OLED_MAX_FPS);
@@ -87,7 +86,8 @@ String settingCommandSelect(String command) {
     newState = true;
     returnText = "Settings Updated";
     return returnText;
-  } else if (command.startsWith("clock ")) {
+  }
+  else if (command.startsWith("clock ")) {
     String clockPart = command.substring(6);
     clockPart.trim();
 
@@ -193,7 +193,8 @@ String settingCommandSelect(String command) {
     newState = true;
     returnText = "Settings Updated";
     return returnText;
-  } else {
+  }
+  else {
     returnText = "Huh?";
     return returnText;
   }
@@ -216,8 +217,8 @@ void processKB_settings() {
           OLED().oledWord(returnText);
           delay(1000);
         }
-      } else
-        HOME_INIT();
+      }
+      else HOME_INIT();
       break;
 
     case settings1:
@@ -231,12 +232,12 @@ void einkHandler_settings() {
 
     // Load settings
     loadState(false);
-
+    
     // Display Background
     display.fillScreen(GxEPD_WHITE);
     display.drawBitmap(0, 0, _settings, 320, 218, GxEPD_BLACK);
 
-    display.setFont(&FreeSerif9pt8b);
+    display.setFont(&FreeSerif9pt7b);
     // First column of settings
     // OLED_BRIGHTNESS
     display.setCursor(8, 42);
@@ -245,35 +246,23 @@ void einkHandler_settings() {
     display.setCursor(8, 65);
     display.print(String(TIMEOUT).c_str());
     // SYSTEM_CLOCK
-    if (SYSTEM_CLOCK)
-      display.drawBitmap(8, 75, _toggleON, 26, 11, GxEPD_BLACK);
-    else
-      display.drawBitmap(8, 75, _toggleOFF, 26, 11, GxEPD_BLACK);
+    if (SYSTEM_CLOCK) display.drawBitmap(8, 75, _toggleON, 26, 11, GxEPD_BLACK);
+    else display.drawBitmap(8, 75, _toggleOFF, 26, 11, GxEPD_BLACK);
     // SHOW_YEAR
-    if (SHOW_YEAR)
-      display.drawBitmap(8, 98, _toggleON, 26, 11, GxEPD_BLACK);
-    else
-      display.drawBitmap(8, 98, _toggleOFF, 26, 11, GxEPD_BLACK);
+    if (SHOW_YEAR) display.drawBitmap(8, 98, _toggleON, 26, 11, GxEPD_BLACK);
+    else display.drawBitmap(8, 98, _toggleOFF, 26, 11, GxEPD_BLACK);
     // SAVE_POWER
-    if (SAVE_POWER)
-      display.drawBitmap(8, 121, _toggleON, 26, 11, GxEPD_BLACK);
-    else
-      display.drawBitmap(8, 121, _toggleOFF, 26, 11, GxEPD_BLACK);
+    if (SAVE_POWER) display.drawBitmap(8, 121, _toggleON, 26, 11, GxEPD_BLACK);
+    else display.drawBitmap(8, 121, _toggleOFF, 26, 11, GxEPD_BLACK);
     // DEBUG_VERBOSE
-    if (DEBUG_VERBOSE)
-      display.drawBitmap(8, 144, _toggleON, 26, 11, GxEPD_BLACK);
-    else
-      display.drawBitmap(8, 144, _toggleOFF, 26, 11, GxEPD_BLACK);
+    if (DEBUG_VERBOSE) display.drawBitmap(8, 144, _toggleON, 26, 11, GxEPD_BLACK);
+    else display.drawBitmap(8, 144, _toggleOFF, 26, 11, GxEPD_BLACK);
     // HOME_ON_BOOT
-    if (HOME_ON_BOOT)
-      display.drawBitmap(8, 167, _toggleON, 26, 11, GxEPD_BLACK);
-    else
-      display.drawBitmap(8, 167, _toggleOFF, 26, 11, GxEPD_BLACK);
+    if (HOME_ON_BOOT) display.drawBitmap(8, 167, _toggleON, 26, 11, GxEPD_BLACK);
+    else display.drawBitmap(8, 167, _toggleOFF, 26, 11, GxEPD_BLACK);
     // ALLOW_NO_MICROSD
-    if (ALLOW_NO_MICROSD)
-      display.drawBitmap(8, 190, _toggleON, 26, 11, GxEPD_BLACK);
-    else
-      display.drawBitmap(8, 190, _toggleOFF, 26, 11, GxEPD_BLACK);
+    if (ALLOW_NO_MICROSD) display.drawBitmap(8, 190, _toggleON, 26, 11, GxEPD_BLACK);
+    else display.drawBitmap(8, 190, _toggleOFF, 26, 11, GxEPD_BLACK);
     // OLED_MAX_FPS
     display.setCursor(163, 42);
     display.print(String(OLED_MAX_FPS).c_str());

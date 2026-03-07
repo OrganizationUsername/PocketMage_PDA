@@ -1,19 +1,19 @@
 
+#include <globals.h>
+
 #include <USB.h>
 #include <USBMSC.h>
-#include <driver/sdmmc_defs.h>
-#include <driver/sdmmc_host.h>
-#include <globals.h>
 #include <sdmmc_cmd.h>
-#if !OTA_APP  // POCKETMAGE_OS
+#include <driver/sdmmc_host.h>
+#include <driver/sdmmc_defs.h>
+#if !OTA_APP // POCKETMAGE_OS
 static String currentLine = "";
 static constexpr const char* TAG = "USB";
 static USBMSC msc;
-static sdmmc_card_t* card = nullptr;  // SD card pointer
+static sdmmc_card_t* card = nullptr;     // SD card pointer
 
 void USBAppShutdown() {
-  if (!mscEnabled)
-    return;
+  if (!mscEnabled) return;
 
   ESP_LOGI(TAG, "Shutting down USB MSC...");
 
@@ -39,7 +39,7 @@ void USBAppShutdown() {
 
   SD_MMC.end();  // Properly stop previous SD_MMC usage
 
-  SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0);  // Check your pins here
+  SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0); // Check your pins here
 
   if (!SD_MMC.begin("/sdcard", true) || SD_MMC.cardType() == CARD_NONE) {
     ESP_LOGE(TAG, "SD Mount Failed :(");
@@ -60,12 +60,9 @@ void USBAppShutdown() {
     }
   }
 
-  if (!SD_MMC.exists("/sys"))
-    SD_MMC.mkdir("/sys");
-  if (!SD_MMC.exists("/journal"))
-    SD_MMC.mkdir("/journal");
-  if (SAVE_POWER)
-    pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+  if (!SD_MMC.exists("/sys"))     SD_MMC.mkdir("/sys");
+  if (!SD_MMC.exists("/journal")) SD_MMC.mkdir("/journal");
+  if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
   disableTimeout = false;
 
   // Switch USB contol to BMS
@@ -74,13 +71,11 @@ void USBAppShutdown() {
 
 static int32_t onWrite(uint32_t lba, uint32_t offset, uint8_t* buffer, uint32_t bufsize) {
   SDActive = true;
-  if (!card || card->csd.sector_size == 0)
-    return -1;
+  if (!card || card->csd.sector_size == 0) return -1;
   uint32_t secSize = card->csd.sector_size;
   for (uint32_t i = 0; i < bufsize / secSize; ++i) {
     esp_err_t err = sdmmc_write_sectors(card, buffer + i * secSize, lba + i, 1);
-    if (err != ESP_OK)
-      return -1;
+    if (err != ESP_OK) return -1;
   }
   SDActive = false;
   return bufsize;
@@ -88,13 +83,11 @@ static int32_t onWrite(uint32_t lba, uint32_t offset, uint8_t* buffer, uint32_t 
 
 static int32_t onRead(uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize) {
   SDActive = true;
-  if (!card || card->csd.sector_size == 0)
-    return -1;
+  if (!card || card->csd.sector_size == 0) return -1;
   uint32_t secSize = card->csd.sector_size;
   for (uint32_t i = 0; i < bufsize / secSize; ++i) {
     esp_err_t err = sdmmc_read_sectors(card, (uint8_t*)buffer + i * secSize, lba + i, 1);
-    if (err != ESP_OK)
-      return -1;
+    if (err != ESP_OK) return -1;
   }
   SDActive = false;
   return bufsize;
@@ -108,24 +101,15 @@ static bool onStartStop(uint8_t power_condition, bool start, bool eject) {
   return true;
 }
 
-static void usbEventCallback(void* arg, esp_event_base_t event_base, int32_t event_id,
-                             void* event_data) {
+static void usbEventCallback(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
   SDActive = true;
   if (event_base == ARDUINO_USB_EVENTS) {
     arduino_usb_event_data_t* data = (arduino_usb_event_data_t*)event_data;
     switch (event_id) {
-      case ARDUINO_USB_STARTED_EVENT:
-        ESP_LOGI(TAG, "USB Connected");
-        break;
-      case ARDUINO_USB_STOPPED_EVENT:
-        ESP_LOGI(TAG, "USB Disconnected");
-        break;
-      case ARDUINO_USB_SUSPEND_EVENT:
-        ESP_LOGI(TAG, "USB Suspended");
-        break;
-      case ARDUINO_USB_RESUME_EVENT:
-        ESP_LOGI(TAG, "USB Resumed");
-        break;
+      case ARDUINO_USB_STARTED_EVENT: ESP_LOGI(TAG, "USB Connected"); break;
+      case ARDUINO_USB_STOPPED_EVENT: ESP_LOGI(TAG, "USB Disconnected"); break;
+      case ARDUINO_USB_SUSPEND_EVENT: ESP_LOGI(TAG, "USB Suspended"); break;
+      case ARDUINO_USB_RESUME_EVENT:  ESP_LOGI(TAG, "USB Resumed"); break;
     }
   }
   SDActive = false;
@@ -142,8 +126,7 @@ void USB_INIT() {
 
   disableTimeout = true;
 
-  if (mscEnabled)
-    return;
+  if (mscEnabled) return;
 
   ESP_LOGI(TAG, "Unmounting SD_MMC for USB MSC...");
 
@@ -203,7 +186,7 @@ void USB_INIT() {
   USB.onEvent(usbEventCallback);
   USB.begin();
 
-  // ESP_LOGI("USB MSC started. Capacity: %d bytes\n", card->csd.capacity * card->csd.sector_size);
+  //ESP_LOGI("USB MSC started. Capacity: %d bytes\n", card->csd.capacity * card->csd.sector_size);
   mscEnabled = true;
   delay(50);
 
@@ -215,20 +198,19 @@ void USB_INIT() {
 
 void processKB_USB() {
   int currentMillis = millis();
-  // Make sure oled only updates at 10FPS
-  if (currentMillis - OLEDFPSMillis >= (1000 / 10 /*OLED_MAX_FPS*/)) {
+  //Make sure oled only updates at 10FPS
+  if (currentMillis - OLEDFPSMillis >= (1000/10 /*OLED_MAX_FPS*/)) {
     OLEDFPSMillis = currentMillis;
     OLED().oledLine(currentLine, currentLine.length(), false);
   }
-
-  if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
+  
+  if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {  
     char inchar = KB().updateKeypress();
     // HANDLE INPUTS
-    // No char recieved
-    if (inchar == 0)
-      ;
+    //No char recieved
+    if (inchar == 0);   
     // Home recieved
-    else if (inchar == 12 || inchar == 8 || inchar == 19 || inchar == 28 || inchar == 12) {
+    else if (inchar == 12 || inchar == 8 || inchar == 19 || inchar == 28|| inchar == 12) {
       USBAppShutdown();
       prefs.begin("PocketMage", false);
       prefs.putInt("CurrentAppState", static_cast<int>(HOME));
@@ -242,7 +224,7 @@ void processKB_USB() {
 void einkHandler_USB() {
   if (newState) {
     newState = false;
-
+    
     display.fillScreen(GxEPD_WHITE);
 
     // Display Status Bar
