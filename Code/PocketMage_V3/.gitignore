@@ -1,2 +1,4 @@
 .pio
 .vscode
+os_build/
+ota_build/

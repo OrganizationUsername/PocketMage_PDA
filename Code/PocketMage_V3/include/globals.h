@@ -2,30 +2,32 @@
 #define GLOBALS_H
 
 // LIBRARIES
-#include <USBMSC.h>
-#include <SD_MMC.h>
 #include <SD.h>
+#include <SD_MMC.h>
 #include <SPI.h>
+#include <USBMSC.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <pocketmage.h>
-// OTA_APP: remove assets.h + assets.cpp, and OS_APPS/, follow OTA_APP: tag instructions in codebase
-#include <assets.h> // OTA_APP: remove
+
+#if !OTA_APP
+#include <assets.h>
+#endif
 
 // ===================== SPI BUSSES =====================
-extern SPIClass *vspi;
-extern SPIClass *hspi;
+extern SPIClass* vspi;
+extern SPIClass* hspi;
 extern fs::FS* global_fs;
 
 // ===================== SYSTEM STATE =====================
-extern Preferences prefs;                       // NVS preferencesv
-extern TaskHandle_t einkHandlerTaskHandle;      // E-Ink handler task
-extern int OLEDFPSMillis;                       // Last OLED FPS update time
-extern int KBBounceMillis;                      // Last keyboard debounce time
-extern volatile bool newState;                  // App state changed
-extern volatile bool disableTimeout;            // Disable timeout globally
-extern bool fileLoaded;     
-extern unsigned int flashMillis;                // Flash timing
+extern Preferences prefs;                   // NVS preferencesv
+extern TaskHandle_t einkHandlerTaskHandle;  // E-Ink handler task
+extern int OLEDFPSMillis;                   // Last OLED FPS update time
+extern int KBBounceMillis;                  // Last keyboard debounce time
+extern volatile bool newState;              // App state changed
+extern volatile bool disableTimeout;        // Disable timeout globally
+extern bool fileLoaded;
+extern unsigned int flashMillis;  // Flash timing
 
 extern String OTA1_APP;
 extern String OTA2_APP;
@@ -33,20 +35,33 @@ extern String OTA3_APP;
 extern String OTA4_APP;
 
 // ===================== KEYBOARD STATE =====================
-enum KBState { NORMAL, SHIFT, FUNC, FN_SHIFT };    // Keyboard state
+enum KBState { NORMAL, SHIFT, FUNC, FN_SHIFT };  // Keyboard state
 
 // ===================== APP STATES =====================
-enum AppState { HOME, TXT, FILEWIZ, USB_APP, BT, SETTINGS, TASKS, CALENDAR, JOURNAL, LEXICON, APPLOADER, TERMINAL };
-extern const String appStateNames[];            // App state names
-extern const unsigned char *appIcons[11];       // App icons
-extern AppState CurrentAppState;                // Current app state
+enum AppState {
+  HOME,
+  TXT,
+  FILEWIZ,
+  USB_APP,
+  BT,
+  SETTINGS,
+  TASKS,
+  CALENDAR,
+  JOURNAL,
+  LEXICON,
+  APPLOADER,
+  TERMINAL
+};
+extern const String appStateNames[];       // App state names
+extern const unsigned char* appIcons[11];  // App icons
+extern AppState CurrentAppState;           // Current app state
 
 // ===================== TASKS APP =====================
 extern std::vector<std::vector<String>> tasks;  // Task list
 
 // ===================== HOME APP =====================
-enum HOMEState { HOME_HOME, NOWLATER };         // Home app states
-extern HOMEState CurrentHOMEState;              // Current home state
+enum HOMEState { HOME_HOME, NOWLATER };  // Home app states
+extern HOMEState CurrentHOMEState;       // Current home state
 
 // ===================== PocketMage APP PROTOTYPES =====================
 // <APP.cpp>
@@ -54,23 +69,22 @@ void APP_INIT();
 void processKB_APP();
 void einkHandler_APP();
 
-//utils.cpp
+// utils.cpp
 void printDebug();
 void checkTimeout();
 void loadState(bool changeState = true);
 void updateBattState();
 String textPrompt(String promptText = "", String prefix = "");
 #if !OTA_APP
-void saveEditingFile(); // OTA_APP: Remove saveEditingFile
+void saveEditingFile();  // OTA_APP: Remove saveEditingFile
 #endif
 // <PocketMage>
-void einkHandler(void *parameter);
+void einkHandler(void* parameter);
 void applicationEinkHandler();
 void processKB();
 
-
 // OTA_APP: Remove all pocketmage v3 prototypes below this line
-#if !OTA_APP // POCKETMAGE_OS
+#if !OTA_APP  // POCKETMAGE_OS
 // <FILEWIZ.cpp>
 void FILEWIZ_INIT();
 void processKB_FILEWIZ();
@@ -94,7 +108,7 @@ void resetIdle();
 
 // <TASKS.cpp>
 void TASKS_INIT();
-void sortTasksByDueDate(std::vector<std::vector<String>> &tasks);
+void sortTasksByDueDate(std::vector<std::vector<String>>& tasks);
 void updateTaskArray();
 void einkHandler_TASKS();
 void processKB_TASKS();
@@ -132,8 +146,8 @@ void processKB_APPLOADER();
 void einkHandler_APPLOADER();
 void rebootToAppSlot(int otaIndex);
 void loadAndDrawAppIcon(int x, int y, int otaIndex, bool showName = true, int maxNameChars = 10);
-#endif // POCKETMAGE_OS
-#endif // GLOBALS_H
+#endif  // POCKETMAGE_OS
+#endif  // GLOBALS_H
 
 // <TERMINAL.cpp>
 void TERMINAL_INIT();

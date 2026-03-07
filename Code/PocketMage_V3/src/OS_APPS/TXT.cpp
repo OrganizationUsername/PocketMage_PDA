@@ -8,7 +8,8 @@
 
 #include <globals.h>
 #if !OTA_APP  // POCKETMAGE_OS
-static constexpr const char* TAG = "TXT_NEW";
+enum TXTState { TXT_, WIZ0, WIZ1, WIZ2, WIZ3, FONT };
+TXTState CurrentTXTState = TXT_;
 
 #pragma region Font includes
 // Mono
@@ -23,237 +24,20 @@ static constexpr const char* TAG = "TXT_NEW";
 #include <Fonts/FreeMonoBoldOblique9pt8b.h>
 #include <Fonts/FreeMonoOblique9pt8b.h>
 
-// Serif
-#include <Fonts/FreeSerif9pt8b.h>
-#include <Fonts/FreeSerifBold12pt8b.h>
-#include <Fonts/FreeSerifBold18pt8b.h>
-#include <Fonts/FreeSerifBold24pt8b.h>
-#include <Fonts/FreeSerifBold9pt8b.h>
-#include <Fonts/FreeSerifBoldItalic12pt8b.h>
-#include <Fonts/FreeSerifBoldItalic18pt8b.h>
-#include <Fonts/FreeSerifBoldItalic24pt8b.h>
-#include <Fonts/FreeSerifBoldItalic9pt8b.h>
-#include <Fonts/FreeSerifItalic9pt8b.h>
-
-// Sans
-#include <Fonts/FreeSans9pt8b.h>
-#include <Fonts/FreeSansBold12pt8b.h>
-#include <Fonts/FreeSansBold18pt8b.h>
-#include <Fonts/FreeSansBold24pt8b.h>
-#include <Fonts/FreeSansBold9pt8b.h>
-#include <Fonts/FreeSansBoldOblique12pt8b.h>
-#include <Fonts/FreeSansBoldOblique18pt8b.h>
-#include <Fonts/FreeSansBoldOblique24pt8b.h>
-#include <Fonts/FreeSansBoldOblique9pt8b.h>
-#include <Fonts/FreeSansOblique9pt8b.h>
-
-#include "esp32-hal-log.h"
-#include "esp_log.h"
-
-// ------------------ General ------------------
-enum TXTState_NEW { TXT_, FONT, SAVE_AS, LOAD_FILE, JOURNAL_MODE, NEW_FILE };
-TXTState_NEW CurrentTXTState_NEW = TXT_;
-
-// ------------------ Fonts ------------------
-#define SPECIAL_PADDING 20      // Padding for lists, code blocks, quote blocks
-#define SPACEWIDTH_SYMBOL "n"   // n is roughly the width of a space
-#define WORDWIDTH_BUFFER 0      // Add extra spacing to each word
-#define DISPLAY_WIDTH_BUFFER 0  // Add margin for text wrap calc
-#define HEADING_LINE_PADDING 8  // Padding between each line
-#define NORMAL_LINE_PADDING 2
-
-enum FontFamily { serif = 0, sans = 1, mono = 2 };
-uint8_t fontStyle = sans;
-
-struct FontMap {
-  const GFXfont* normal;
-  const GFXfont* normal_B;
-  const GFXfont* normal_I;
-  const GFXfont* normal_BI;
-
-  const GFXfont* h1;
-  const GFXfont* h1_B;
-  const GFXfont* h1_I;
-  const GFXfont* h1_BI;
-
-  const GFXfont* h2;
-  const GFXfont* h2_B;
-  const GFXfont* h2_I;
-  const GFXfont* h2_BI;
-
-  const GFXfont* h3;
-  const GFXfont* h3_B;
-  const GFXfont* h3_I;
-  const GFXfont* h3_BI;
-
-  const GFXfont* code;
-  const GFXfont* code_B;
-  const GFXfont* code_I;
-  const GFXfont* code_BI;
-
-  const GFXfont* quote;
-  const GFXfont* quote_B;
-  const GFXfont* quote_I;
-  const GFXfont* quote_BI;
-
-  const GFXfont* list;
-  const GFXfont* list_B;
-  const GFXfont* list_I;
-  const GFXfont* list_BI;
-};
-
-FontMap fonts[3];
-
-void setFontStyle(FontFamily f) {
-  fontStyle = f;
+void TXT_INIT_OLD() {
+  if (PM_SDAUTO().getEditingFile() != "")
+    PM_SDAUTO().loadFile();
+  CurrentAppState = TXT;
+  CurrentTXTState = TXT_;
+  KB().setKeyboardState(NORMAL);
+  TOUCH().setDynamicScroll(0);
+  newLineAdded = true;
 }
 
-// ------------------ Document Variables ------------------
-static bool updateScreen = false;
-static ulong currentLineNum = 0;
-static ulong topVisibleLine = 0;
+void processKB_TXT_OLD() {
+  OLED().setPowerSave(false);
 
-#define MAX_LINES 1000    // Max number of lines in document
-#define LINE_CAP 64       // Max number of characters in a line
-
-struct Line {
-  char type = ' ';          // line type
-  char text[LINE_CAP + 1];  // line content
-  uint16_t len;             // line length
-};
-
-struct Document {
-  Line lines[MAX_LINES];
-  ulong lineCount;
-};
-
-Document document;
-
-void initLine(Line& line) {
-  line.type = ' ';
-  line.len = 0;
-  line.text[0] = '\0';
-}
-
-#pragma region Editor Helpers
-// Helpers
-const GFXfont* pickFont(char style, bool bold, bool italic) {
-  FontMap& fm = fonts[fontStyle];  // currently active family
-
-  switch (style) {
-    case '1':  // H1
-      if (bold && italic) return fm.h1_BI;
-      if (bold) return fm.h1_B;
-      if (italic) return fm.h1_I;
-      return fm.h1;
-
-    case '2':  // H2
-      if (bold && italic) return fm.h2_BI;
-      if (bold) return fm.h2_B;
-      if (italic) return fm.h2_I;
-      return fm.h2;
-
-    case '3':  // H3
-      if (bold && italic) return fm.h3_BI;
-      if (bold) return fm.h3_B;
-      if (italic) return fm.h3_I;
-      return fm.h3;
-
-    case '>':  // Quote
-      if (bold && italic) return fm.quote_BI;
-      if (bold) return fm.quote_B;
-      if (italic) return fm.quote_I;
-      return fm.quote;
-
-    case 'U':  // Unordered List
-    case 'u':  // Unordered List (Continuation)
-    case 'O':  // Ordered List
-    case 'o':  // Ordered List (Continuation)
-      if (bold && italic) return fm.list_BI;
-      if (bold) return fm.list_B;
-      if (italic) return fm.list_I;
-      return fm.list;
-
-    case 'C':  // Code
-      if (bold && italic) return fm.code_BI;
-      if (bold) return fm.code_B;
-      if (italic) return fm.code_I;
-      return fm.code;
-
-    default:  // Normal
-      if (bold && italic) return fm.normal_BI;
-      if (bold) return fm.normal_B;
-      if (italic) return fm.normal_I;
-      return fm.normal;
-  }
-}
-
-uint16_t getLineMaxHeight(Line& line) {
-  bool boldExists = false;
-  bool italicExists = false;
-  bool boldItalicExists = false;
-  const GFXfont* font;
-
-  // Text bounds
-  int16_t x1, y1;
-  uint16_t wpx, hpx;
-
-  // Invalid line
-  if (line.type == ' ') return 0;
-
-  // Check if there is a bold or italic or both in the line based on *
-  for (uint16_t i = 0; i < line.len; i++) {
-    if (line.text[i] == '*') {
-      // count consecutive stars if there isn't a star before
-      if (i == 0 || line.text[i - 1] != '*') {
-        uint8_t starCount = 0;
-        while (i + starCount < line.len && line.text[i + starCount] == '*' && starCount < 3) {
-          starCount++;
-        }
-        
-        if (starCount == 1) italicExists = true;
-        else if (starCount == 2) boldExists = true;
-        else if (starCount == 3) boldItalicExists = true;
-      }
-    }
-  }
-
-  if (boldItalicExists) {
-    // Make all text bold + italic
-    font = pickFont(line.type, true, true);
-  }
-  else if (boldExists) {
-    // Make all text bold
-    font = pickFont(line.type, true, false);
-  } 
-  else if (italicExists) {
-    // Make all text italic
-    font = pickFont(line.type, false, true);
-  }
-  else {
-    // Make all text normal
-    font = pickFont(line.type, false, false);
-  }
-
-  // Measure the height
-  display.setFont(font);
-  display.getTextBounds(line.text, 0, 0, &x1, &y1, &wpx, &hpx);
-  return hpx;
-}
-
-int getCalculatedLineHeight(Line& line) {
-  if (line.type == 'H') return 8;  // Horizontal Rule
-  if (line.type == 'B') return 8;  // Blank Line
-
-  int h = getLineMaxHeight(line);
-  
-  // Add appropriate padding
-  if (line.type == '1' || line.type == '2' || line.type == '3') {
-    return h + HEADING_LINE_PADDING;
-  }
-  
-  return h + NORMAL_LINE_PADDING;
-}
+  disableTimeout = false;
 
 int drawLineEink(Document& doc, ulong lineIndex, int startX, int startY, bool isSelected) {
   // Extract the line using the passed document and index
@@ -2095,325 +1879,358 @@ void editor(char inchar) {
 
   // Render OLED
   unsigned long currentMillis = millis();
-  if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
-    OLEDFPSMillis = currentMillis;
-    
-    if (TOUCH().getLastTouch() == -1) {
-      if (!currentlyTyping) keypad.flush(); 
-      lastInput = millis();
-      editorOledDisplay(document.lines[currentLineNum], cursor_pos, currentlyTyping);
-    } else {
-      displayScrollPreviewOLED(document, currentLineNum);
-    }
-  }
-}
+  if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
+    char inchar = KB().updateKeypress();
+    switch (CurrentTXTState) {
+      case TXT_:
+        // SET MAXIMUMS AND FONT
+        EINK().setTXTFont(EINK().getCurrentFont());
 
 
-#pragma region INIT
-void initFonts() {
-  // Mono
-  fonts[mono].normal = &FreeMono9pt8b;
-  fonts[mono].normal_B = &FreeMonoBold9pt8b;
-  fonts[mono].normal_I = &FreeMonoOblique9pt8b;
-  fonts[mono].normal_BI = &FreeMonoBoldOblique9pt8b;
-
-  fonts[mono].h1 = &FreeMonoBold24pt8b;
-  fonts[mono].h1_B = &FreeMonoBold24pt8b;  // Already bold
-  fonts[mono].h1_I = &FreeMonoBoldOblique24pt8b;
-  fonts[mono].h1_BI = &FreeMonoBoldOblique24pt8b;
-
-  fonts[mono].h2 = &FreeMonoBold18pt8b;
-  fonts[mono].h2_B = &FreeMonoBold18pt8b;
-  fonts[mono].h2_I = &FreeMonoBoldOblique18pt8b;
-  fonts[mono].h2_BI = &FreeMonoBoldOblique18pt8b;
-
-  fonts[mono].h3 = &FreeMonoBold12pt8b;
-  fonts[mono].h3_B = &FreeMonoBold12pt8b;
-  fonts[mono].h3_I = &FreeMonoBoldOblique12pt8b;
-  fonts[mono].h3_BI = &FreeMonoBoldOblique12pt8b;
-
-  fonts[mono].code = &FreeMono9pt8b;
-  fonts[mono].code_B = &FreeMono9pt8b;
-  fonts[mono].code_I = &FreeMono9pt8b;
-  fonts[mono].code_BI = &FreeMono9pt8b;
-
-  fonts[mono].quote = &FreeMono9pt8b;
-  fonts[mono].quote_B = &FreeMonoBold9pt8b;
-  fonts[mono].quote_I = &FreeMonoOblique9pt8b;
-  fonts[mono].quote_BI = &FreeMonoBoldOblique9pt8b;
-
-  fonts[mono].list = &FreeMono9pt8b;
-  fonts[mono].list_B = &FreeMonoBold9pt8b;
-  fonts[mono].list_I = &FreeMonoOblique9pt8b;
-  fonts[mono].list_BI = &FreeMonoBoldOblique9pt8b;
-
-  // Serif
-  fonts[serif].normal = &FreeSerif9pt8b;
-  fonts[serif].normal_B = &FreeSerifBold9pt8b;
-  fonts[serif].normal_I = &FreeSerifItalic9pt8b;
-  fonts[serif].normal_BI = &FreeSerifBoldItalic9pt8b;
-
-  fonts[serif].h1 = &FreeSerifBold24pt8b;
-  fonts[serif].h1_B = &FreeSerifBold24pt8b;
-  fonts[serif].h1_I = &FreeSerifBoldItalic24pt8b;
-  fonts[serif].h1_BI = &FreeSerifBoldItalic24pt8b;
-
-  fonts[serif].h2 = &FreeSerifBold18pt8b;
-  fonts[serif].h2_B = &FreeSerifBold18pt8b;
-  fonts[serif].h2_I = &FreeSerifBoldItalic18pt8b;
-  fonts[serif].h2_BI = &FreeSerifBoldItalic18pt8b;
-
-  fonts[serif].h3 = &FreeSerifBold12pt8b;
-  fonts[serif].h3_B = &FreeSerifBold12pt8b;
-  fonts[serif].h3_I = &FreeSerifBoldItalic12pt8b;
-  fonts[serif].h3_BI = &FreeSerifBoldItalic12pt8b;
-
-  fonts[serif].code = &FreeMono9pt8b;
-  fonts[serif].code_B = &FreeMono9pt8b;
-  fonts[serif].code_I = &FreeMono9pt8b;
-  fonts[serif].code_BI = &FreeMono9pt8b;
-
-  fonts[serif].quote = &FreeSerif9pt8b;
-  fonts[serif].quote_B = &FreeSerifBold9pt8b;
-  fonts[serif].quote_I = &FreeSerifItalic9pt8b;
-  fonts[serif].quote_BI = &FreeSerifBoldItalic9pt8b;
-
-  fonts[serif].list = &FreeSerif9pt8b;
-  fonts[serif].list_B = &FreeSerifBold9pt8b;
-  fonts[serif].list_I = &FreeSerifItalic9pt8b;
-  fonts[serif].list_BI = &FreeSerifBoldItalic9pt8b;
-
-  // Sans
-  fonts[sans].normal = &FreeSans9pt8b;
-  fonts[sans].normal_B = &FreeSansBold9pt8b;
-  fonts[sans].normal_I = &FreeSansOblique9pt8b;
-  fonts[sans].normal_BI = &FreeSansBoldOblique9pt8b;
-
-  fonts[sans].h1 = &FreeSansBold24pt8b;
-  fonts[sans].h1_B = &FreeSansBold24pt8b;
-  fonts[sans].h1_I = &FreeSansBoldOblique24pt8b;
-  fonts[sans].h1_BI = &FreeSansBoldOblique24pt8b;
-
-  fonts[sans].h2 = &FreeSansBold18pt8b;
-  fonts[sans].h2_B = &FreeSansBold18pt8b;
-  fonts[sans].h2_I = &FreeSansBoldOblique18pt8b;
-  fonts[sans].h2_BI = &FreeSansBoldOblique18pt8b;
-
-  fonts[sans].h3 = &FreeSansBold12pt8b;
-  fonts[sans].h3_B = &FreeSansBold12pt8b;
-  fonts[sans].h3_I = &FreeSansBoldOblique12pt8b;
-  fonts[sans].h3_BI = &FreeSansBoldOblique12pt8b;
-
-  fonts[sans].code = &FreeMono9pt8b;
-  fonts[sans].code_B = &FreeMono9pt8b;
-  fonts[sans].code_I = &FreeMono9pt8b;
-  fonts[sans].code_BI = &FreeMono9pt8b;
-
-  fonts[sans].quote = &FreeSans9pt8b;
-  fonts[sans].quote_B = &FreeSansBold9pt8b;
-  fonts[sans].quote_I = &FreeSansOblique9pt8b;
-  fonts[sans].quote_BI = &FreeSansBoldOblique9pt8b;
-
-  fonts[sans].list = &FreeSans9pt8b;
-  fonts[sans].list_B = &FreeSansBold9pt8b;
-  fonts[sans].list_I = &FreeSansOblique9pt8b;
-  fonts[sans].list_BI = &FreeSansBoldOblique9pt8b;
-}
-
-void TXT_INIT(String inPath) {
-  initFonts();
-  setFontStyle(serif);
-  bool fileLoaded = loadMarkdownFile(inPath);
-  if (fileLoaded) {
-    CurrentAppState = TXT;
-    CurrentTXTState_NEW = TXT_;
-    updateScreen = true;
-  } else {
-    CurrentAppState = TXT;
-    CurrentTXTState_NEW = LOAD_FILE;
-    updateScreen = true;
-  }
-  
-}
-
-void TXT_INIT_JournalMode() {
-  /*
-  initFonts();
-
-  String outPath = getCurrentJournal();
-  if (!outPath.startsWith("/")) outPath = "/" + outPath;
-  loadMarkdownFile(outPath);
-
-  setFontStyle(serif);
-
-  lineScroll = 0;
-  updateScreen = true;
-  CurrentAppState = TXT;
-  CurrentTXTState_NEW = JOURNAL_MODE;
-  */
-}
-
-#pragma region Loops
-void einkHandler_TXT_NEW() {
-  if (updateScreen) {
-    updateScreen = false;
-    display.setFullWindow();
-    display.setTextColor(GxEPD_BLACK);
-    editorEinkDisplay(document, currentLineNum);
-    EINK().forceSlowFullUpdate(true);
-    EINK().refresh();
-  }
-}
-
-void processKB_TXT_NEW() {
-  OLED().setPowerSave(false);
-  disableTimeout = false;
-  
-  // Temporary input buffer for filenames (SAVE_AS, NEW_FILE)
-  static String inputBuffer = "";
-
-  // Read input ONCE per loop
-  char inchar = KB().updateKeypress();
-  unsigned long currentMillis = millis();
-
-  // Check for scrolling independent of keyboard timing
-  if (CurrentTXTState_NEW == TXT_ || CurrentTXTState_NEW == JOURNAL_MODE) {
-    if (TOUCH().updateScroll(document.lineCount, currentLineNum)) {
-      updateScreen = true; // Instantly trigger E-ink update on scroll
-    }
-  }
-
-  // Route the input to the current state
-  switch (CurrentTXTState_NEW) {
-    case TXT_:
-    case JOURNAL_MODE:
-      editor(inchar);
-      break;
-
-    case SAVE_AS:
-      if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
-        if (inchar == 0) {
-          // Do nothing
+        // HANDLE INPUTS
+        // No char recieved
+        if (inchar == 0)
+          ;
+        else if (inchar == 12) {
+          CurrentAppState = HOME;
+          currentLine = "";
+          newState = true;
+          KB().setKeyboardState(NORMAL);
         }
-        // CR Recieved (ENTER)
-        else if (inchar == 13) {
-          if (inputBuffer != "" && inputBuffer != "-") {
-            if (!inputBuffer.startsWith("/notes/")) inputBuffer = "/notes/" + inputBuffer;
-            if (!inputBuffer.endsWith(".txt") && !inputBuffer.endsWith(".md")) inputBuffer = inputBuffer + ".txt";
-            saveMarkdownFile(inputBuffer);
-            CurrentTXTState_NEW = TXT_;
-          } else {
-            OLED().oledWord("Invalid Name");
-            delay(2000);
-          }
-          inputBuffer = "";
+        // TAB Recieved
+        else if (inchar == 9) {
+          currentLine += "    ";
         }
         // SHIFT Recieved
         else if (inchar == 17) {
-          if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) KB().setKeyboardState(NORMAL);
-          else if (KB().getKeyboardState() == FUNC) KB().setKeyboardState(FN_SHIFT);
-          else KB().setKeyboardState(SHIFT);
+          if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) {
+            KB().setKeyboardState(NORMAL);
+          } else if (KB().getKeyboardState() == FUNC) {
+            KB().setKeyboardState(FN_SHIFT);
+          } else {
+            KB().setKeyboardState(SHIFT);
+          }
         }
         // FN Recieved
         else if (inchar == 18) {
-          if (KB().getKeyboardState() == FUNC || KB().getKeyboardState() == FN_SHIFT) KB().setKeyboardState(NORMAL);
-          else if (KB().getKeyboardState() == SHIFT) KB().setKeyboardState(FN_SHIFT);
-          else KB().setKeyboardState(FUNC);
+          if (KB().getKeyboardState() == FUNC || KB().getKeyboardState() == FN_SHIFT) {
+            KB().setKeyboardState(NORMAL);
+          } else if (KB().getKeyboardState() == SHIFT) {
+            KB().setKeyboardState(FN_SHIFT);
+          } else {
+            KB().setKeyboardState(FUNC);
+          }
         }
         // Space Recieved
         else if (inchar == 32) {
-          // Spaces not allowed in filenames
+          currentLine += " ";
+        }
+        // CR Recieved
+        else if (inchar == 13) {
+          allLines.push_back(currentLine);
+          currentLine = "";
+          newLineAdded = true;
         }
         // ESC / CLEAR Recieved
         else if (inchar == 20) {
-          inputBuffer = "";
+          allLines.clear();
+          currentLine = "";
+          OLED().oledWord("Clearing...");
+          doFull = true;
+          newLineAdded = true;
+          delay(300);
+        }
+        // LEFT
+        else if (inchar == 19) {
+        }
+        // RIGHT
+        else if (inchar == 21) {
         }
         // BKSP Recieved
         else if (inchar == 8) {
-          if (inputBuffer.length() > 0) {
-            inputBuffer.remove(inputBuffer.length() - 1);
+          if (currentLine.length() > 0) {
+            currentLine.remove(currentLine.length() - 1);
           }
         }
-        // Home recieved
-        else if (inchar == 12) {
-          CurrentTXTState_NEW = TXT_;
+        // SAVE Recieved
+        else if (inchar == 6) {
+          // File exists, save normally
+          if (PM_SDAUTO().getEditingFile() != "" && PM_SDAUTO().getEditingFile() != "-") {
+            PM_SDAUTO().saveFile();
+            KB().setKeyboardState(NORMAL);
+            newLineAdded = true;
+          }
+          // File does not exist, make a new one
+          else {
+            CurrentTXTState = WIZ3;
+            currentLine = "";
+            KB().setKeyboardState(NORMAL);
+            doFull = true;
+            newState = true;
+          }
         }
-        // Normal Character
-        else {
-          inputBuffer += inchar;
-          if (inchar >= 48 && inchar <= 57) {}  // Only leave FN on if typing numbers
+        // LOAD Recieved
+        else if (inchar == 5) {
+          PM_SDAUTO().loadFile();
+          KB().setKeyboardState(NORMAL);
+          newLineAdded = true;
+        }
+        // FILE Recieved
+        else if (inchar == 7) {
+          CurrentTXTState = WIZ0;
+          KB().setKeyboardState(NORMAL);
+          newState = true;
+        }
+        // Font Switcher
+        else if (inchar == 14) {
+          CurrentTXTState = FONT;
+          KB().setKeyboardState(FUNC);
+          newState = true;
+        } else {
+          currentLine += inchar;
+          if (inchar >= 48 && inchar <= 57) {
+          }  // Only leave FN on if typing numbers
           else if (KB().getKeyboardState() != NORMAL) {
             KB().setKeyboardState(NORMAL);
           }
         }
 
-        // Render OLED for text input
-        if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
+        currentMillis = millis();
+        // Make sure oled only updates at 60fps
+        if (currentMillis - OLEDFPSMillis >= (1000 / 60)) {
           OLEDFPSMillis = currentMillis;
-          OLED().oledLine(inputBuffer, inputBuffer.length(), false, "Input Filename");
+          // ONLY SHOW OLEDLINE WHEN NOT IN SCROLL MODE
+          if (TOUCH().getLastTouch() == -1) {
+            OLED().oledLine(currentLine, currentLine.length());
+            if (TOUCH().getPrevDynamicScroll() != TOUCH().getDynamicScroll())
+              TOUCH().setPrevDynamicScroll(TOUCH().getDynamicScroll());
+          } else
+            OLED().oledScroll();
         }
       }
       break;
 
-    case NEW_FILE:
-      if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
-        if (inchar == 0) {
-          // Do nothing
+        if (currentLine.length() > 0) {
+          int16_t x1, y1;
+          uint16_t charWidth, charHeight;
+          display.getTextBounds(currentLine, 0, 0, &x1, &y1, &charWidth, &charHeight);
+
+          if (charWidth >= display.width() - 5) {
+            // If currentLine ends with a space, just start a new line
+            if (currentLine.endsWith(" ")) {
+              allLines.push_back(currentLine);
+              currentLine = "";
+            }
+            // If currentLine ends with a letter, we are in the middle of a word
+            else {
+              int lastSpace = currentLine.lastIndexOf(' ');
+              String partialWord;
+
+              if (lastSpace != -1) {
+                partialWord = currentLine.substring(lastSpace + 1);
+                currentLine = currentLine.substring(0, lastSpace);  // Strip partial word
+                allLines.push_back(currentLine);
+                currentLine = partialWord;  // Start new line with the partial word
+              }
+              // No spaces found, whole line is a single word
+              else {
+                allLines.push_back(currentLine);
+                currentLine = "";
+              }
+            }
+            newLineAdded = true;
+          }
         }
-        // CR Recieved (ENTER)
-        else if (inchar == 13) {
-          if (inputBuffer != "" && inputBuffer != "-") {
-            if (!inputBuffer.startsWith("/notes/")) inputBuffer = "/notes/" + inputBuffer;
-            if (!inputBuffer.endsWith(".txt") && !inputBuffer.endsWith(".md")) inputBuffer = inputBuffer + ".txt";
-            newMarkdownFile(inputBuffer);
-            CurrentTXTState_NEW = TXT_;
-            updateScreen = true;
+
+        break;
+      case WIZ0:
+        // No char recieved
+        if (inchar == 0)
+          ;
+        // BKSP Recieved
+        else if (inchar == 127 || inchar == 8) {
+          CurrentTXTState = TXT_;
+          KB().setKeyboardState(NORMAL);
+          newLineAdded = true;
+          currentWord = "";
+          currentLine = "";
+          display.fillScreen(GxEPD_WHITE);
+        } else if (inchar >= '0' && inchar <= '9') {
+          int fileIndex = (inchar == '0') ? 10 : (inchar - '0');
+          // Edit a new file
+          if (PM_SDAUTO().getFilesListIndex(fileIndex - 1) != PM_SDAUTO().getEditingFile()) {
+            // Selected file does not exist, create a new one
+            if (PM_SDAUTO().getFilesListIndex(fileIndex - 1) == "-") {
+              CurrentTXTState = WIZ3;
+              EINK().setFullRefreshAfter(FULL_REFRESH_AFTER + 1);
+              newState = true;
+              display.fillScreen(GxEPD_WHITE);
+            }
+            // Selected file exists, prompt to save current file
+            else {
+              prevEditingFile = PM_SDAUTO().getEditingFile();
+              PM_SDAUTO().setEditingFile(PM_SDAUTO().getFilesListIndex(fileIndex - 1));
+              CurrentTXTState = WIZ1;
+              EINK().setFullRefreshAfter(FULL_REFRESH_AFTER + 1);
+              newState = true;
+              display.fillScreen(GxEPD_WHITE);
+            }
+          }
+          // Selected file is current file, return to editor
+          else {
+            KB().setKeyboardState(NORMAL);
+            CurrentTXTState = TXT_;
+            newLineAdded = true;
+            currentWord = "";
+            currentLine = "";
+            display.fillScreen(GxEPD_WHITE);
+          }
+        }
+
+        currentMillis = millis();
+        // Make sure oled only updates at 60fps
+        if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
+          OLEDFPSMillis = currentMillis;
+          OLED().oledLine(currentWord, currentWord.length(), false);
+        }
+        break;
+      case WIZ1:
+        // No char recieved
+        if (inchar == 0)
+          ;
+        // BKSP Recieved
+        else if (inchar == 127 || inchar == 8) {
+          CurrentTXTState = WIZ0;
+          KB().setKeyboardState(FUNC);
+          EINK().setFullRefreshAfter(FULL_REFRESH_AFTER + 1);
+          newState = true;
+          display.fillScreen(GxEPD_WHITE);
+        } else if (inchar >= '0' && inchar <= '9') {
+          int numSelect = (inchar == '0') ? 10 : (inchar - '0');
+          // YES (save current file)
+          if (numSelect == 1) {
+            // File to be saved does not exist
+            if (prevEditingFile == "" || prevEditingFile == "-") {
+              CurrentTXTState = WIZ2;
+              currentWord = "";
+              KB().setKeyboardState(NORMAL);
+              EINK().setFullRefreshAfter(FULL_REFRESH_AFTER + 1);
+              newState = true;
+              display.fillScreen(GxEPD_WHITE);
+            }
+            // File to be saved exists
+            else {
+              // Save current file
+              PM_SDAUTO().saveFile();
+
+              delay(200);
+              // Load new file
+              PM_SDAUTO().loadFile();
+              // Return to TXT
+              CurrentTXTState = TXT_;
+              KB().setKeyboardState(NORMAL);
+              newLineAdded = true;
+              currentWord = "";
+              currentLine = "";
+              display.fillScreen(GxEPD_WHITE);
+            }
+          }
+          // NO  (don't save current file)
+          else if (numSelect == 2) {
+            // Just load new file
+            PM_SDAUTO().loadFile();
+            // Return to TXT
+            CurrentTXTState = TXT_;
+            KB().setKeyboardState(NORMAL);
+            newLineAdded = true;
+            currentWord = "";
+            currentLine = "";
+            display.fillScreen(GxEPD_WHITE);
+          }
+        }
+
+        currentMillis = millis();
+        // Make sure oled only updates at 60fps
+        if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
+          OLEDFPSMillis = currentMillis;
+          OLED().oledLine(currentWord, currentWord.length(), false);
+        }
+        break;
+
+      case WIZ2:
+        // No char recieved
+        if (inchar == 0)
+          ;
+        // SHIFT Recieved
+        else if (inchar == 17) {
+          if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) {
+            KB().setKeyboardState(NORMAL);
+          } else if (KB().getKeyboardState() == FUNC) {
+            KB().setKeyboardState(FN_SHIFT);
           } else {
             OLED().oledWord("Invalid Name");
             delay(2000);
           }
           inputBuffer = "";
         }
-        // SHIFT Recieved
-        else if (inchar == 17) {
-          if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) KB().setKeyboardState(NORMAL);
-          else if (KB().getKeyboardState() == FUNC) KB().setKeyboardState(FN_SHIFT);
-          else KB().setKeyboardState(SHIFT);
-        }
         // FN Recieved
         else if (inchar == 18) {
-          if (KB().getKeyboardState() == FUNC || KB().getKeyboardState() == FN_SHIFT) KB().setKeyboardState(NORMAL);
-          else if (KB().getKeyboardState() == SHIFT) KB().setKeyboardState(FN_SHIFT);
-          else KB().setKeyboardState(FUNC);
+          if (KB().getKeyboardState() == FUNC || KB().getKeyboardState() == FN_SHIFT) {
+            KB().setKeyboardState(NORMAL);
+          } else if (KB().getKeyboardState() == SHIFT) {
+            KB().setKeyboardState(FN_SHIFT);
+          } else {
+            KB().setKeyboardState(FUNC);
+          }
+          newState = true;
         }
         // Space Recieved
         else if (inchar == 32) {
-          // Spaces not allowed in filenames
         }
         // ESC / CLEAR Recieved
         else if (inchar == 20) {
-          inputBuffer = "";
+          currentWord = "";
         }
         // BKSP Recieved
         else if (inchar == 8) {
-          if (inputBuffer.length() > 0) {
-            inputBuffer.remove(inputBuffer.length() - 1);
+          if (currentWord.length() > 0) {
+            currentWord.remove(currentWord.length() - 1);
           }
         }
-        // Home recieved
-        else if (inchar == 12) {
-          CurrentTXTState_NEW = TXT_;
+        // ENTER Recieved
+        else if (inchar == 13) {
+          prevEditingFile = "/" + currentWord + ".txt";
+
+          // Save the file
+          PM_SDAUTO().saveFile();
+
+          delay(200);
+          // Load new file
+          PM_SDAUTO().loadFile();
+
+          keypad.enableInterrupts();
+
+          // Return to TXT_
+          CurrentTXTState = TXT_;
+          KB().setKeyboardState(NORMAL);
+          newLineAdded = true;
+          currentWord = "";
+          currentLine = "";
         }
-        // Normal Character
+        // All other chars
         else {
-          inputBuffer += inchar;
-          if (inchar >= 48 && inchar <= 57) {}  // Only leave FN on if typing numbers
+          // Only allow char to be added if it's an allowed char
+          if (isalnum(inchar) || inchar == '_' || inchar == '-' || inchar == '.')
+            currentWord += inchar;
+          if (inchar >= 48 && inchar <= 57) {
+          }  // Only leave FN on if typing numbers
           else if (KB().getKeyboardState() != NORMAL) {
             KB().setKeyboardState(NORMAL);
           }
         }
 
-        // Render OLED for text input
+        currentMillis = millis();
+        // Make sure oled only updates at 60fps
         if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
           OLEDFPSMillis = currentMillis;
           OLED().oledLine(inputBuffer, inputBuffer.length(), false, "Name New File");
@@ -2427,23 +2244,285 @@ void processKB_TXT_NEW() {
         // Return to TXT
         CurrentTXTState_NEW = TXT_;
         break;
-      }
-      else if (outPath != "") {
-        // Ensure file is a .txt or .md
-        if (outPath.endsWith(".txt") || outPath.endsWith(".md")) {
-          if (!outPath.startsWith("/")) outPath = "/" + outPath;
-          loadMarkdownFile(outPath);
-          PM_SDAUTO().setEditingFile(outPath);
-          CurrentTXTState_NEW = TXT_;
-          updateScreen = true;
-        } else {
-          OLED().oledWord("Incompatible Filetype!");
-          delay(2000);
-          CurrentTXTState_NEW = TXT_;
+      case WIZ3:
+        // No char recieved
+        if (inchar == 0)
+          ;
+        // SHIFT Recieved
+        else if (inchar == 17) {
+          if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) {
+            KB().setKeyboardState(NORMAL);
+          } else if (KB().getKeyboardState() == FUNC) {
+            KB().setKeyboardState(FN_SHIFT);
+          } else {
+            KB().setKeyboardState(SHIFT);
+          }
         }
-      }
-      break;
+        // FN Recieved
+        else if (inchar == 18) {
+          if (KB().getKeyboardState() == FUNC || KB().getKeyboardState() == FN_SHIFT) {
+            KB().setKeyboardState(NORMAL);
+          } else if (KB().getKeyboardState() == SHIFT) {
+            KB().setKeyboardState(FN_SHIFT);
+          } else {
+            KB().setKeyboardState(FUNC);
+          }
+        }
+        // Space Recieved
+        else if (inchar == 32) {
+        }
+        // ESC / CLEAR Recieved
+        else if (inchar == 20) {
+          currentWord = "";
+        }
+        // BKSP Recieved
+        else if (inchar == 8) {
+          if (currentWord.length() > 0) {
+            currentWord.remove(currentWord.length() - 1);
+          }
+        }
+        // ENTER Recieved
+        else if (inchar == 13) {
+          prevEditingFile = "/" + currentWord + ".txt";
+
+          // Save the file
+          PM_SDAUTO().saveFile();
+          // Ask to save prev file
+
+          // Return to TXT_
+          CurrentTXTState = TXT_;
+          KB().setKeyboardState(NORMAL);
+          newLineAdded = true;
+          currentWord = "";
+          currentLine = "";
+        }
+        // All other chars
+        else {
+          // Only allow char to be added if it's an allowed char
+          if (isalnum(inchar) || inchar == '_' || inchar == '-' || inchar == '.')
+            currentWord += inchar;
+          if (inchar >= 48 && inchar <= 57) {
+          }  // Only leave FN on if typing numbers
+          else if (KB().getKeyboardState() != NORMAL) {
+            KB().setKeyboardState(NORMAL);
+          }
+        }
+
+        currentMillis = millis();
+        // Make sure oled only updates at 60fps
+        if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
+          OLEDFPSMillis = currentMillis;
+          OLED().oledLine(currentWord, currentWord.length(), false);
+        }
+        break;
+      case FONT:
+        // No char recieved
+        if (inchar == 0)
+          ;
+        // BKSP Recieved
+        else if (inchar == 127 || inchar == 8) {
+          CurrentTXTState = TXT_;
+          KB().setKeyboardState(NORMAL);
+          newLineAdded = true;
+          currentWord = "";
+          currentLine = "";
+          display.fillScreen(GxEPD_WHITE);
+        } else if (inchar >= '0' && inchar <= '9') {
+          int fontIndex = (inchar == '0') ? 10 : (inchar - '0');
+          switch (fontIndex) {
+            case 1:
+              EINK().setCurrentFont(&FreeMonoBold9pt8b);
+              break;
+            case 2:
+              EINK().setCurrentFont(&FreeSans9pt8b);
+              break;
+            case 3:
+              EINK().setCurrentFont(&FreeSerif9pt8b);
+              break;
+            case 4:
+              EINK().setCurrentFont(&FreeSerifBold9pt8b);
+              break;
+            case 5:
+              EINK().setCurrentFont(&FreeMono12pt8b);
+              break;
+            case 6:
+              EINK().setCurrentFont(&FreeSans12pt8b);
+              break;
+            case 7:
+              EINK().setCurrentFont(&FreeSerif12pt8b);
+              break;
+            default:
+              EINK().setCurrentFont(&FreeMonoBold9pt8b);
+              break;
+          }
+          // SET THE FONT
+          EINK().setTXTFont(EINK().getCurrentFont());
+
+          // UPDATE THE ARRAY TO MATCH NEW FONT SIZE
+          String fullTextStr = vectorToString();
+          stringToVector(fullTextStr);
+
+          CurrentTXTState = TXT_;
+          KB().setKeyboardState(NORMAL);
+          newLineAdded = true;
+          currentWord = "";
+          currentLine = "";
+          display.fillScreen(GxEPD_WHITE);
+        }
+
+        currentMillis = millis();
+        // Make sure oled only updates at 60fps
+        if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
+          OLEDFPSMillis = currentMillis;
+          OLED().oledLine(currentWord, currentWord.length(), false);
+        }
+        break;
+    }
+    KBBounceMillis = currentMillis;
   }
 }
 
+void einkHandler_TXT_OLD() {
+  if (newLineAdded || newState) {
+    switch (CurrentTXTState) {
+      case TXT_:
+        if (newState && doFull) {
+          EINK().resetDisplay();
+          EINK().refresh();
+        }
+        if (newLineAdded && !newState) {
+          EINK().einkTextDynamic(true);
+          EINK().refresh();
+        }
+        break;
+      case WIZ0:
+        display.setFullWindow();
+        EINK().einkTextDynamic(true, true);
+        display.setFont(&FreeMonoBold9pt8b);
+
+        display.fillRect(0, display.height() - 26, display.width(), 26, GxEPD_WHITE);
+        display.drawRect(0, display.height() - 20, display.width(), 20, GxEPD_BLACK);
+        display.setCursor(4, display.height() - 6);
+        // display.print("W:" + String(countWords(allText)) + " C:" +
+        // String(countVisibleChars(allText)) + " L:" + String(EINK().countLines(allText)));
+        display.drawBitmap(display.width() - 30, display.height() - 20, KBStatusallArray[6], 30, 20,
+                           GxEPD_BLACK);
+
+        display.fillRect(60, 0, 200, 218, GxEPD_WHITE);
+        display.drawBitmap(60, 0, fileWizLiteallArray[0], 200, 218, GxEPD_BLACK);
+
+        keypad.disableInterrupts();
+        PM_SDAUTO().listDir(*global_fs, "/");
+        keypad.enableInterrupts();
+
+        for (int i = 0; i < MAX_FILES; i++) {
+          display.setCursor(88, 54 + (17 * i));
+          display.print(PM_SDAUTO().getFilesListIndex(i));
+        }
+
+        EINK().refresh();
+        KB().setKeyboardState(FUNC);
+        break;
+      case WIZ1:
+        display.setFont(&FreeMonoBold9pt8b);
+
+        display.fillRect(0, display.height() - 26, display.width(), 26, GxEPD_WHITE);
+        display.drawRect(0, display.height() - 20, display.width(), 20, GxEPD_BLACK);
+        display.setCursor(4, display.height() - 6);
+        // display.print("W:" + String(countWords(allText)) + " C:" +
+        // String(countVisibleChars(allText)) + " L:" + String(EINK().countLines(allText)));
+        display.drawBitmap(display.width() - 30, display.height() - 20, KBStatusallArray[6], 30, 20,
+                           GxEPD_BLACK);
+
+        display.fillRect(60, 0, 200, 218, GxEPD_WHITE);
+        display.drawBitmap(60, 0, fileWizLiteallArray[1], 200, 218, GxEPD_BLACK);
+
+        EINK().refresh();
+        KB().setKeyboardState(FUNC);
+        break;
+      case WIZ2:
+        display.setFont(&FreeMonoBold9pt8b);
+
+        display.fillRect(0, display.height() - 26, display.width(), 26, GxEPD_WHITE);
+        display.drawRect(0, display.height() - 20, display.width(), 20, GxEPD_BLACK);
+        display.setCursor(4, display.height() - 6);
+        // display.print("W:" + String(countWords(allText)) + " C:" +
+        // String(countVisibleChars(allText)) + " L:" + String(EINK().countLines(allText)));
+        display.drawBitmap(display.width() - 30, display.height() - 20, KBStatusallArray[6], 30, 20,
+                           GxEPD_BLACK);
+
+        display.fillRect(60, 0, 200, 218, GxEPD_WHITE);
+        display.drawBitmap(60, 0, fileWizLiteallArray[2], 200, 218, GxEPD_BLACK);
+
+        EINK().refresh();
+        KB().setKeyboardState(NORMAL);
+        break;
+      case WIZ3:
+        display.setFullWindow();
+        EINK().einkTextDynamic(true, true);
+        display.setFont(&FreeMonoBold9pt8b);
+
+        display.fillRect(0, display.height() - 26, display.width(), 26, GxEPD_WHITE);
+        display.drawRect(0, display.height() - 20, display.width(), 20, GxEPD_BLACK);
+        display.setCursor(4, display.height() - 6);
+        // display.print("W:" + String(countWords(allText)) + " C:" +
+        // String(countVisibleChars(allText)) + " L:" + String(EINK().countLines(allText)));
+        display.drawBitmap(display.width() - 30, display.height() - 20, KBStatusallArray[6], 30, 20,
+                           GxEPD_BLACK);
+
+        display.fillRect(60, 0, 200, 218, GxEPD_WHITE);
+        display.drawBitmap(60, 0, fileWizLiteallArray[3], 200, 218, GxEPD_BLACK);
+
+        EINK().refresh();
+        KB().setKeyboardState(NORMAL);
+        break;
+      case FONT:
+        display.setFullWindow();
+        EINK().einkTextDynamic(true, true);
+
+        EINK().drawStatusBar("Select a Font (0-9)");
+
+        display.fillRect(60, 0, 200, 218, GxEPD_WHITE);
+        display.drawBitmap(60, 0, fontfont0, 200, 218, GxEPD_BLACK);
+
+        keypad.disableInterrupts();
+        PM_SDAUTO().listDir(*global_fs, "/");
+        keypad.enableInterrupts();
+
+        for (int i = 0; i < 7; i++) {
+          display.setCursor(88, 54 + (17 * i));
+          switch (i) {
+            case 0:
+              display.setFont(&FreeMonoBold9pt8b);
+              break;
+            case 1:
+              display.setFont(&FreeSans9pt8b);
+              break;
+            case 2:
+              display.setFont(&FreeSerif9pt8b);
+              break;
+            case 3:
+              display.setFont(&FreeSerifBold9pt8b);
+              break;
+            case 4:
+              display.setFont(&FreeMono12pt8b);
+              break;
+            case 5:
+              display.setFont(&FreeSans12pt8b);
+              break;
+            case 6:
+              display.setFont(&FreeSerif12pt8b);
+              break;
+          }
+          display.print("Font Number " + String(i + 1));
+        }
+
+        EINK().refresh();
+        KB().setKeyboardState(FUNC);
+        break;
+    }
+    newState = false;
+    newLineAdded = false;
+  }
+}
 #endif

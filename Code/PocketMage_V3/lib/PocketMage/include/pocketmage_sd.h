@@ -5,12 +5,12 @@
 //  d8'   .8P 88    .8P  //
 //   Y88888P  8888888P   //
 
-
 #pragma once
 #include <Arduino.h>
 #include <FS.h>
 
-// forward-declaration to avoid including U8g2lib.h, GxEPD2_BW.h, pocketmage_oled.h, and pocketmage_eink.h
+// forward-declaration to avoid including U8g2lib.h, GxEPD2_BW.h, pocketmage_oled.h, and
+// pocketmage_eink.h
 class PocketmageOled;
 class PocketmageEink;
 
@@ -21,7 +21,7 @@ static String filesList[10];
 
 // ===================== SD CLASS =====================
 class PocketmageSDAUTO {
-public:
+ public:
   explicit PocketmageSDAUTO() {}
 
   void saveFile();
@@ -35,48 +35,64 @@ public:
   void appendToFile(String path, String inText);
 
   // Getters / Setters
-  bool getNoSD()  {return noSD;}
-  void setNoSD(bool in) {noSD = in;}
+  bool getNoSD() {
+    return noSD;
+  }
+  void setNoSD(bool in) {
+    noSD = in;
+  }
 
-  String getWorkingFile()  {return workingFile;}
-  void setWorkingFile(String in) {workingFile = in;}
+  String getWorkingFile() {
+    return workingFile;
+  }
+  void setWorkingFile(String in) {
+    workingFile = in;
+  }
 
-  String getEditingFile()  {return editingFile;}
-  void setEditingFile(String in) {editingFile = in;}
+  String getEditingFile() {
+    return editingFile;
+  }
+  void setEditingFile(String in) {
+    editingFile = in;
+  }
 
-  String getFilesListIndex(int index) {return filesList[index];}
-  void setFilesListIndex(int index, String content) {filesList[index] = content;}
+  String getFilesListIndex(int index) {
+    return filesList[index];
+  }
+  void setFilesListIndex(int index, String content) {
+    filesList[index] = content;
+  }
 
-  // low level methods  To Do: remove arguments for fs::FS &fs and reference internal fs::FS* instead
-  void listDir(fs::FS &fs, const char *dirname);
-  void readFile(fs::FS &fs, const char *path);
-  String readFileToString(fs::FS &fs, const char *path);
-  void writeFile(fs::FS &fs, const char *path, const char *message);
-  void appendFile(fs::FS &fs, const char *path, const char *message);
-  void renameFile(fs::FS &fs, const char *path1, const char *path2);
-  void deleteFile(fs::FS &fs, const char *path);
+  // low level methods  To Do: remove arguments for fs::FS &fs and reference internal fs::FS*
+  // instead
+  void listDir(fs::FS& fs, const char* dirname);
+  void readFile(fs::FS& fs, const char* path);
+  String readFileToString(fs::FS& fs, const char* path);
+  void writeFile(fs::FS& fs, const char* path, const char* message);
+  void appendFile(fs::FS& fs, const char* path, const char* message);
+  void renameFile(fs::FS& fs, const char* path1, const char* path2);
+  void deleteFile(fs::FS& fs, const char* path);
   // Read a binary file fully into a buffer
   bool readBinaryFile(const char* path, uint8_t* buf, size_t len);
   // Convenience: read file size
   size_t getFileSize(const char* path);
 
-private:
-
-  static constexpr const char*  tag               = "MAGE_SD";
+ private:
+  static constexpr const char* tag = "MAGE_SD";
 
   String editingFile_ = "";
   String filesList_[MAX_FILES];
   String workingFile_ = "";
 
-  uint8_t                       fileIndex_        = 0;
-  String                        excludedFiles_[3] = { "/temp.txt", "/settings.txt", "/tasks.txt" };
+  uint8_t fileIndex_ = 0;
+  String excludedFiles_[3] = {"/temp.txt", "/settings.txt", "/tasks.txt"};
 
   // Flags / counters
-  bool                          noSD_              = false;
+  bool noSD_ = false;
 };
 
 class PocketmageSDMMC {
-public:
+ public:
   explicit PocketmageSDMMC() {}
 
   void saveFile();
@@ -90,48 +106,64 @@ public:
   void appendToFile(String path, String inText);
 
   // Getters / Setters
-  bool getNoSD()  {return noSD;}
-  void setNoSD(bool in) {noSD = in;}
+  bool getNoSD() {
+    return noSD;
+  }
+  void setNoSD(bool in) {
+    noSD = in;
+  }
 
-  String getWorkingFile()  {return workingFile;}
-  void setWorkingFile(String in) {workingFile = in;}
+  String getWorkingFile() {
+    return workingFile;
+  }
+  void setWorkingFile(String in) {
+    workingFile = in;
+  }
 
-  String getEditingFile()  {return editingFile;}
-  void setEditingFile(String in) {editingFile = in;}
+  String getEditingFile() {
+    return editingFile;
+  }
+  void setEditingFile(String in) {
+    editingFile = in;
+  }
 
-  String getFilesListIndex(int index) {return filesList[index];}
-  void setFilesListIndex(int index, String content) {filesList[index] = content;}
+  String getFilesListIndex(int index) {
+    return filesList[index];
+  }
+  void setFilesListIndex(int index, String content) {
+    filesList[index] = content;
+  }
 
-  // low level methods  To Do: remove arguments for fs::FS &fs and reference internal fs::FS* instead
-  void listDir(fs::FS &fs, const char *dirname);
-  void readFile(fs::FS &fs, const char *path);
-  String readFileToString(fs::FS &fs, const char *path);
-  void writeFile(fs::FS &fs, const char *path, const char *message);
-  void appendFile(fs::FS &fs, const char *path, const char *message);
-  void renameFile(fs::FS &fs, const char *path1, const char *path2);
-  void deleteFile(fs::FS &fs, const char *path);
+  // low level methods  To Do: remove arguments for fs::FS &fs and reference internal fs::FS*
+  // instead
+  void listDir(fs::FS& fs, const char* dirname);
+  void readFile(fs::FS& fs, const char* path);
+  String readFileToString(fs::FS& fs, const char* path);
+  void writeFile(fs::FS& fs, const char* path, const char* message);
+  void appendFile(fs::FS& fs, const char* path, const char* message);
+  void renameFile(fs::FS& fs, const char* path1, const char* path2);
+  void deleteFile(fs::FS& fs, const char* path);
   // Read a binary file fully into a buffer
   bool readBinaryFile(const char* path, uint8_t* buf, size_t len);
   // Convenience: read file size
   size_t getFileSize(const char* path);
 
-private:
-
-  static constexpr const char*  tag               = "MAGE_SD";
+ private:
+  static constexpr const char* tag = "MAGE_SD";
 
   String editingFile_ = "";
   String filesList_[MAX_FILES];
   String workingFile_ = "";
 
-  uint8_t                       fileIndex_        = 0;
-  String                        excludedFiles_[3] = { "/temp.txt", "/settings.txt", "/tasks.txt" };
+  uint8_t fileIndex_ = 0;
+  String excludedFiles_[3] = {"/temp.txt", "/settings.txt", "/tasks.txt"};
 
   // Flags / counters
-  bool                          noSD_              = false;
+  bool noSD_ = false;
 };
 
 class PocketmageSDSPI {
-public:
+ public:
   explicit PocketmageSDSPI() {}
 
   void saveFile();
@@ -145,44 +177,60 @@ public:
   void appendToFile(String path, String inText);
 
   // Getters / Setters
-  bool getNoSD()  {return noSD;}
-  void setNoSD(bool in) {noSD = in;}
+  bool getNoSD() {
+    return noSD;
+  }
+  void setNoSD(bool in) {
+    noSD = in;
+  }
 
-  String getWorkingFile()  {return workingFile;}
-  void setWorkingFile(String in) {workingFile = in;}
+  String getWorkingFile() {
+    return workingFile;
+  }
+  void setWorkingFile(String in) {
+    workingFile = in;
+  }
 
-  String getEditingFile()  {return editingFile;}
-  void setEditingFile(String in) {editingFile = in;}
+  String getEditingFile() {
+    return editingFile;
+  }
+  void setEditingFile(String in) {
+    editingFile = in;
+  }
 
-  String getFilesListIndex(int index) {return filesList[index];}
-  void setFilesListIndex(int index, String content) {filesList[index] = content;}
+  String getFilesListIndex(int index) {
+    return filesList[index];
+  }
+  void setFilesListIndex(int index, String content) {
+    filesList[index] = content;
+  }
 
-  // low level methods  To Do: remove arguments for fs::FS &fs and reference internal fs::FS* instead
-  void listDir(fs::FS &fs, const char *dirname);
-  void readFile(fs::FS &fs, const char *path);
-  String readFileToString(fs::FS &fs, const char *path);
-  void writeFile(fs::FS &fs, const char *path, const char *message);
-  void appendFile(fs::FS &fs, const char *path, const char *message);
-  void renameFile(fs::FS &fs, const char *path1, const char *path2);
-  void deleteFile(fs::FS &fs, const char *path);
+  // low level methods  To Do: remove arguments for fs::FS &fs and reference internal fs::FS*
+  // instead
+  void listDir(fs::FS& fs, const char* dirname);
+  void readFile(fs::FS& fs, const char* path);
+  String readFileToString(fs::FS& fs, const char* path);
+  void writeFile(fs::FS& fs, const char* path, const char* message);
+  void appendFile(fs::FS& fs, const char* path, const char* message);
+  void renameFile(fs::FS& fs, const char* path1, const char* path2);
+  void deleteFile(fs::FS& fs, const char* path);
   // Read a binary file fully into a buffer
   bool readBinaryFile(const char* path, uint8_t* buf, size_t len);
   // Convenience: read file size
   size_t getFileSize(const char* path);
 
-private:
-
-  static constexpr const char*  tag               = "MAGE_SD";
+ private:
+  static constexpr const char* tag = "MAGE_SD";
 
   String editingFile_ = "";
   String filesList_[MAX_FILES];
   String workingFile_ = "";
 
-  uint8_t                       fileIndex_        = 0;
-  String                        excludedFiles_[3] = { "/temp.txt", "/settings.txt", "/tasks.txt" };
+  uint8_t fileIndex_ = 0;
+  String excludedFiles_[3] = {"/temp.txt", "/settings.txt", "/tasks.txt"};
 
   // Flags / counters
-  bool                          noSD_              = false;
+  bool noSD_ = false;
 };
 
 void setupSD();
