@@ -268,6 +268,7 @@ void processKB_TASKS() {
             KB().setKeyboardState(NORMAL);
             input = textPrompt("Enter a new task name:");
             if (input != "_EXIT_") {
+              OLED().oledWord("updating task...");
               tasks[selectedTask][0] = input;
               updateTasksFile();
 
@@ -296,9 +297,10 @@ void processKB_TASKS() {
 
             // DATE IS VALID
             if (testDate != "Invalid") {
+              OLED().oledWord("updating task...");
               newTaskDueDate = input;
 
-              // ADD NEW TASK
+              // UPDATE DUE DATE
               tasks[selectedTask][1] = newTaskDueDate;
               updateTasksFile();
 
@@ -316,6 +318,7 @@ void processKB_TASKS() {
           else if (inchar == '3') { // DELETE TASK
             int response = boolPrompt("Delete Task?");
             if (response == 1) {
+              OLED().oledWord("deleting...");
               deleteTask(selectedTask);
               updateTasksFile();
 

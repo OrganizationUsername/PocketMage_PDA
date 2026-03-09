@@ -66,7 +66,7 @@ void applicationEinkHandler() {
 // ADD PROCESS/KEYBOARD APP SCRIPTS HERE
 void processKB() {
   // Check for USB KB
-  //KB().checkUSBKB();
+  KB().checkUSBKB();
 
   // Example OTA APP 
   // Displays a progress bar and then reboots to PocketMage OS
