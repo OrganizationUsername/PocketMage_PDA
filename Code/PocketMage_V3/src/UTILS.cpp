@@ -533,6 +533,42 @@ String textPrompt(String promptText, String prefix) {
   return currentLine;
 }
 
+int boolPrompt(String promptText) {
+  KB().setKeyboardState(NORMAL);
+  OLED().oledWord(promptText + " (y/n)");
+
+  for (;;) {
+    // Run background tasks
+    #if !OTA_APP // POCKETMAGE_OS
+      if (!noTimeout)  checkTimeout();
+      if (DEBUG_VERBOSE) printDebug();
+    #endif
+    updateBattState();
+
+    int currentMillis = millis();
+
+    if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
+      char inchar = KB().updateKeypress();
+
+      // HANDLE INPUTS
+      // No char recieved
+      if (inchar == 0) ;
+      else if (inchar == 'y' || inchar == 'Y') {
+        return 1;
+      }
+      else if (inchar == 'n' || inchar == 'N') {
+        return 0;
+      }
+      else {
+        return -1;
+      }
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(10));
+    yield();
+  }
+}
+
 // OTA_APP: Remove definition of saveEditingFile
 #if !OTA_APP
 void saveEditingFile() {
