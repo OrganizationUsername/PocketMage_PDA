@@ -53,7 +53,7 @@ void potionScrollPreview() {
     int y = 8;
     for (int i = (currentPotionLine - 2); i <= (currentPotionLine + 1); i++) {
       // Skip out of bounds lines
-      if (i < 0 || i > (potionLines.size() - 1) || y > (u8g2.getDisplayHeight() + 10)) {
+      if (i >= potionLines.size() || y > (u8g2.getDisplayHeight() + 10)) {
         continue;
       }
       // Draw each line
@@ -1233,8 +1233,18 @@ void processKB_TERMINAL() {
             cursor_pos--;
           }
           else if (potionLines[currentPotionLine].length() == 0) {
-            potionLines.erase(potionLines.begin() + currentPotionLine);
-            newState = true;
+            // FIX: Prevent deleting the only remaining line in the document
+            if (potionLines.size() > 1) {
+              potionLines.erase(potionLines.begin() + currentPotionLine);
+              
+              // If the deleted line was the last line, shift the active index up
+              if (currentPotionLine >= potionLines.size()) {
+                currentPotionLine--;
+              }
+              // Safely clamp cursor
+              cursor_pos = potionLines[currentPotionLine].length(); 
+              newState = true;
+            }
           }
         }
         // LEFT
@@ -1261,6 +1271,9 @@ void processKB_TERMINAL() {
             }
             else if (line < 0) currentPotionLine = 0;
             else if (line >= potionLines.size()) currentPotionLine = potionLines.size() - 1;
+            
+            // FIX: Prevent substring out-of-bounds crash by clamping cursor
+            cursor_pos = potionLines[currentPotionLine].length();
             newState = true;
           }
           KB().setKeyboardState(NORMAL);
@@ -1400,7 +1413,8 @@ void einkHandler_TERMINAL() {
           if (currentPotionLine <= 20) {
             int y = 10;
             for (size_t i = 0; i < potionLines.size(); i++) {
-              if (i < 0 || i > potionLines.size() || y < 0 || y > (display.height()+10)) continue;
+              // FIX: i >= potionLines.size()
+              if (i >= potionLines.size() || y < 0 || y > (display.height()+10)) continue;
 
               const String& s = potionLines[i];
 
@@ -1425,7 +1439,8 @@ void einkHandler_TERMINAL() {
           else {
             int y = 10;
             for (size_t i = currentPotionLine - 20; i < currentPotionLine + 3; i++) {
-              if (i < 0 || i > potionLines.size() || y < 0 || y > (display.height()+10)) continue;
+              // FIX: i >= potionLines.size()
+              if (i >= potionLines.size() || y < 0 || y > (display.height()+10)) continue;
 
               const String& s = potionLines[i];
 
