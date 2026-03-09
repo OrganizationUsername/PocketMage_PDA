@@ -178,6 +178,7 @@ void setupEink() {
   display.setTextColor(GxEPD_BLACK);
   display.setTextWrap(false);
   EINK().setTXTFont(&FreeMonoBold9pt7b); // default font, computeFontMetrics_()
+  display.fillScreen(GxEPD_WHITE);
 
   xTaskCreatePinnedToCore(
     einkHandler,             // Function name
