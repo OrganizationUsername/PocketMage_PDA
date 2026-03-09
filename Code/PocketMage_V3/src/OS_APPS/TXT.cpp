@@ -62,6 +62,34 @@ TXTState_NEW CurrentTXTState_NEW = TXT_;
 #define HEADING_LINE_PADDING 8  // Padding between each line
 #define NORMAL_LINE_PADDING 2
 
+#pragma region Fonts
+#include <gfxfont.h>
+
+// Fast character width lookup (Bypasses getTextBounds)
+inline uint16_t getFastCharWidth(char c, const GFXfont* font) {
+  if (!font) return 6; // Fallback for default 5x7 font
+  if (c == ' ') c = 'n'; // Retain your SPACEWIDTH_SYMBOL logic
+  
+  if (c >= pgm_read_byte(&font->first) && c <= pgm_read_byte(&font->last)) {
+    GFXglyph *glyph = &(((GFXglyph *)pgm_read_ptr(&font->glyph))[c - pgm_read_byte(&font->first)]);
+    return pgm_read_byte(&glyph->width); // width of bounding box
+  }
+  return 0; 
+}
+
+// Fast line height lookup 
+inline uint16_t getFastCharHeight(const GFXfont* font) {
+  if (!font) return 8;
+  // Base the height on the capital 'A' to prevent the line height from 
+  // bouncing up and down depending on lowercase vs uppercase characters
+  if ('A' >= pgm_read_byte(&font->first) && 'A' <= pgm_read_byte(&font->last)) {
+    GFXglyph *glyph = &(((GFXglyph *)pgm_read_ptr(&font->glyph))['A' - pgm_read_byte(&font->first)]);
+    return pgm_read_byte(&glyph->height);
+  }
+  return pgm_read_byte(&font->yAdvance) / 2;
+}
+
+// Font setup
 enum FontFamily { serif = 0, sans = 1, mono = 2 };
 uint8_t fontStyle = sans;
 
@@ -192,25 +220,16 @@ uint16_t getLineMaxHeight(Line& line) {
   bool boldExists = false;
   bool italicExists = false;
   bool boldItalicExists = false;
-  const GFXfont* font;
 
-  // Text bounds
-  int16_t x1, y1;
-  uint16_t wpx, hpx;
-
-  // Invalid line
   if (line.type == ' ') return 0;
 
-  // Check if there is a bold or italic or both in the line based on *
   for (uint16_t i = 0; i < line.len; i++) {
     if (line.text[i] == '*') {
-      // count consecutive stars if there isn't a star before
       if (i == 0 || line.text[i - 1] != '*') {
         uint8_t starCount = 0;
         while (i + starCount < line.len && line.text[i + starCount] == '*' && starCount < 3) {
           starCount++;
         }
-        
         if (starCount == 1) italicExists = true;
         else if (starCount == 2) boldExists = true;
         else if (starCount == 3) boldItalicExists = true;
@@ -218,27 +237,14 @@ uint16_t getLineMaxHeight(Line& line) {
     }
   }
 
-  if (boldItalicExists) {
-    // Make all text bold + italic
-    font = pickFont(line.type, true, true);
-  }
-  else if (boldExists) {
-    // Make all text bold
-    font = pickFont(line.type, true, false);
-  } 
-  else if (italicExists) {
-    // Make all text italic
-    font = pickFont(line.type, false, true);
-  }
-  else {
-    // Make all text normal
-    font = pickFont(line.type, false, false);
-  }
+  const GFXfont* font;
+  if (boldItalicExists) font = pickFont(line.type, true, true);
+  else if (boldExists) font = pickFont(line.type, true, false);
+  else if (italicExists) font = pickFont(line.type, false, true);
+  else font = pickFont(line.type, false, false);
 
-  // Measure the height
-  display.setFont(font);
-  display.getTextBounds(line.text, 0, 0, &x1, &y1, &wpx, &hpx);
-  return hpx;
+  // Instantly return the pre-calculated height instead of measuring string bounds
+  return getFastCharHeight(font); 
 }
 
 int getCalculatedLineHeight(Line& line) {
@@ -328,7 +334,6 @@ int drawLineEink(Document& doc, ulong lineIndex, int startX, int startY, bool is
         while (i + starCount < line.len && line.text[i + starCount] == '*' && starCount < 3)
           starCount++;
 
-        // toggle style based on number of stars
         switch (starCount) {
           case 1: italic = !italic; break;
           case 2: bold = !bold; break;
@@ -338,23 +343,15 @@ int drawLineEink(Document& doc, ulong lineIndex, int startX, int startY, bool is
       continue;
     }
 
-    // Set the font
     const GFXfont* font = pickFont(style, bold, italic);
     display.setFont(font);
 
-    // Draw text & add width
     temp[0] = c;
     display.setCursor(xpos, baselineY); 
     display.print(temp);
 
-    // Add character space
-    int16_t x1, y1;
-    uint16_t charW, charH;
-    if (c == ' ')
-      display.getTextBounds(SPACEWIDTH_SYMBOL, 0, 0, &x1, &y1, &charW, &charH);
-    else
-      display.getTextBounds(temp, 0, 0, &x1, &y1, &charW, &charH);
-    xpos += charW;
+    // Apply fast width lookup
+    xpos += getFastCharWidth(c, font);
   }
 
   // ---------- Post-Render Formatting ---------- //
@@ -442,7 +439,6 @@ void deleteLineArray(ulong index) {
 int findWrapIndex(const String& content, char style) {
   int availableWidth = display.width() - DISPLAY_WIDTH_BUFFER;
 
-  // Subtract padding based on style
   if (style == '>') availableWidth -= SPECIAL_PADDING;
   else if (style == 'U' || style == 'O' || style == 'u' || style == 'o') availableWidth -= 2 * SPECIAL_PADDING;
   else if (style == 'C') availableWidth -= (SPECIAL_PADDING / 2);
@@ -451,10 +447,9 @@ int findWrapIndex(const String& content, char style) {
   bool italic = false;
   int currentWidth = 0;
   int lastSpaceIndex = -1;
-  char temp[2] = {0, '\0'};
 
-  // Do not exceed LINE_CAP or the string length
   int maxLen = min((int)content.length(), (int)LINE_CAP);
+  const GFXfont* activeFont = pickFont(style, bold, italic);
 
   for (int i = 0; i < maxLen; i++) {
     char c = content[i];
@@ -474,43 +469,26 @@ int findWrapIndex(const String& content, char style) {
           case 2: bold = !bold; break;
           case 3: bold = !bold; italic = !italic; break;
         }
+        // Update font for exact width tracking
+        activeFont = pickFont(style, bold, italic);
       }
-      // Stars don't add to rendered width, skip measurement
       continue; 
     }
 
-    const GFXfont* font = pickFont(style, bold, italic);
-    display.setFont(font);
+    // Instantly look up character width
+    currentWidth += getFastCharWidth(c, activeFont);
 
-    temp[0] = c;
-    int16_t x1, y1;
-    uint16_t charW, charH;
-    
-    if (c == ' ') {
-      display.getTextBounds(SPACEWIDTH_SYMBOL, 0, 0, &x1, &y1, &charW, &charH);
-    } else {
-      display.getTextBounds(temp, 0, 0, &x1, &y1, &charW, &charH);
-    }
-
-    if (currentWidth + charW > availableWidth) {
-      // Word wrap: break at the last space if possible
-      if (lastSpaceIndex > 0) {
-        return lastSpaceIndex;
-      }
-      // Hard break if a single word is longer than the line
+    if (currentWidth > availableWidth) {
+      if (lastSpaceIndex > 0) return lastSpaceIndex;
       return i > 0 ? i : 1; 
     }
-
-    currentWidth += charW;
   }
 
-  // If the loop finished because it hit LINE_CAP, but the string has more characters
-  // attempt to break at a space within the 64 character limit.
   if (maxLen < content.length() && lastSpaceIndex > 0) {
     return lastSpaceIndex;
   }
 
-  return maxLen; // Fits completely within limits
+  return maxLen; 
 }
 
 void reflowParagraph(ulong startLine, uint16_t& activeCursor) {
@@ -2298,6 +2276,11 @@ void processKB_TXT_NEW() {
   char inchar = KB().updateKeypress();
   unsigned long currentMillis = millis();
 
+  // Boost CPU on keypress
+  if (inchar != 0) {
+    pocketmage::setCpuSpeed(240);
+  }
+
   // Check for scrolling independent of keyboard timing
   if (CurrentTXTState_NEW == TXT_ || CurrentTXTState_NEW == JOURNAL_MODE) {
     if (TOUCH().updateScroll(document.lineCount, currentLineNum)) {
@@ -2466,6 +2449,8 @@ void processKB_TXT_NEW() {
       }
       break;
   }
+
+  if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 }
 
 #endif
