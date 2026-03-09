@@ -327,6 +327,9 @@ void processKB_LEXICON() {
   }
 }
 
+#define LEX_MARGIN 8
+#define LEX_LINE_HEIGHT 20
+
 void einkHandler_LEXICON() {
   switch (CurrentLexState) {
     case MENU:
@@ -340,12 +343,12 @@ void einkHandler_LEXICON() {
         EINK().multiPassRefresh(2);
       }
       break;
+      
     case DEF:
       if (newState) {
         newState = false;
 
         display.drawBitmap(0, 0, _lex1, 320, 218, GxEPD_BLACK);
-
         display.setTextColor(GxEPD_BLACK);
 
         // Draw Word
@@ -353,11 +356,62 @@ void einkHandler_LEXICON() {
         display.setCursor(12, 50);
         display.print(defList[definitionIndex].first);
 
-        // Draw Definition
+        // Draw Definition with Word Wrap
         display.setFont(&FreeSerif9pt7b);
-        display.setCursor(8, 87);
-        // ADD WORD WRAP
-        display.print(defList[definitionIndex].second);
+        
+        String defText = defList[definitionIndex].second;
+        int maxW = display.width() - (2 * LEX_MARGIN);
+        int cursorY = 87;
+
+        String currentLine = "";
+        String currentWord = "";
+
+        // Iterate through every character in the definition string
+        for (int i = 0; i <= defText.length(); i++) {
+          char c = (i < defText.length()) ? defText[i] : ' '; // Treat end of string as a space to flush the last word
+
+          // If we hit a space, a newline, or the end of the string, process the word
+          if (c == ' ' || c == '\n' || i == defText.length()) {
+            if (currentWord.length() > 0) {
+              String testLine = currentLine;
+              if (testLine.length() > 0) testLine += " ";
+              testLine += currentWord;
+
+              // Measure the line with the new word added
+              int16_t x1, y1;
+              uint16_t w, h;
+              display.getTextBounds(testLine.c_str(), 0, 0, &x1, &y1, &w, &h);
+
+              // If it exceeds the max width, wrap it to the next line
+              if (w > maxW && currentLine.length() > 0) {
+                display.setCursor(LEX_MARGIN, cursorY);
+                display.print(currentLine);
+                cursorY += LEX_LINE_HEIGHT;
+                currentLine = currentWord; // Start the next line with the word that didn't fit
+              } else {
+                currentLine = testLine; // Word fits, append it to the current line
+              }
+              currentWord = ""; // Reset word buffer
+            }
+
+            // If the character itself was a newline, force a wrap immediately
+            if (c == '\n') {
+              display.setCursor(LEX_MARGIN, cursorY);
+              display.print(currentLine);
+              cursorY += LEX_LINE_HEIGHT;
+              currentLine = "";
+            }
+          } else {
+            // Build the current word character by character
+            currentWord += c;
+          }
+        }
+
+        // Flush any remaining text in the buffer after the loop ends
+        if (currentLine.length() > 0) {
+          display.setCursor(LEX_MARGIN, cursorY);
+          display.print(currentLine);
+        }
 
         EINK().drawStatusBar("Type a New Word:");
 
@@ -367,4 +421,5 @@ void einkHandler_LEXICON() {
       break;
   }
 }
+
 #endif
