@@ -1565,9 +1565,53 @@ void newMarkdownFile(const String& path) {
 }
 
 #pragma region OLED Editor
+// OLED char width cache
+static uint8_t oled_char_widths[5][128] = {0};
+static bool oled_widths_cached = false;
+
+inline void initOledWidthCache() {
+  if (oled_widths_cached) return;
+  char temp[2] = {0, '\0'};
+  
+  for (int i = 32; i < 127; i++) {
+    temp[0] = (char)i;
+    
+    u8g2.setFont(u8g2_font_lubR18_tf);
+    oled_char_widths[0][i] = u8g2.getStrWidth(temp);
+    
+    u8g2.setFont(u8g2_font_luBS18_tf);
+    oled_char_widths[1][i] = u8g2.getStrWidth(temp);
+    
+    u8g2.setFont(u8g2_font_luIS18_tf);
+    oled_char_widths[2][i] = u8g2.getStrWidth(temp);
+    
+    u8g2.setFont(u8g2_font_luBIS18_tf);
+    oled_char_widths[3][i] = u8g2.getStrWidth(temp);
+    
+    u8g2.setFont(u8g2_font_5x7_tf);
+    oled_char_widths[4][i] = u8g2.getStrWidth(temp);
+  }
+  oled_widths_cached = true;
+}
+
+inline uint8_t getFastOledCharWidth(char c, bool bold, bool italic, bool isTiny) {
+  if (c < 32 || c > 126) return 0; // Handle non-printable chars safely
+  if (isTiny) return oled_char_widths[4][(uint8_t)c];
+  
+  uint8_t fontIdx = 0;
+  if (bold && italic) fontIdx = 3;
+  else if (italic) fontIdx = 2;
+  else if (bold) fontIdx = 1;
+  
+  return oled_char_widths[fontIdx][(uint8_t)c];
+}
+
 // OLED Editor
 void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
   u8g2.clearBuffer();
+  
+  // Initialize the width cache on the very first frame
+  initOledWidthCache();
 
   int display_w = u8g2.getDisplayWidth();
   int total_pixel_width = 0;
@@ -1579,10 +1623,7 @@ void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
   bool bold = false;
   bool italic = false;
 
-  // --- PASS 1: Single-sweep width and cursor calculation ---
-  // This completely replaces getLineWidthOLED() and runs 3x faster
-  u8g2.setFont(u8g2_font_lubR18_tf);
-
+  // --- PASS 1: Single-sweep width and cursor calculation (Instantly uses LUT) ---
   for (uint16_t i = 0; i < line.len; i++) {
     char c = line.text[i];
 
@@ -1596,12 +1637,9 @@ void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
           case 3: bold = !bold; italic = !italic; break;
         }
       }
-      u8g2.setFont(u8g2_font_5x7_tf);
-      total_pixel_width += u8g2.getStrWidth("*");
+      total_pixel_width += getFastOledCharWidth('*', false, false, true);
     } else {
-      setFontOLED(bold, italic);
-      char temp[2] = {c, '\0'};
-      int w = u8g2.getStrWidth(temp);
+      int w = getFastOledCharWidth(c, bold, italic, false);
       if (italic) w -= 3; // italic overlap adjustment
       total_pixel_width += w;
     }
@@ -1656,7 +1694,7 @@ void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
       
       u8g2.setFont(u8g2_font_5x7_tf);
       char temp[2] = {'*', '\0'};
-      int w = u8g2.getStrWidth(temp);
+      int w = getFastOledCharWidth('*', false, false, true);
       
       // Only draw if on screen
       if (xpos + w >= 0 && xpos <= display_w) {
@@ -1666,7 +1704,7 @@ void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
     } else {
       setFontOLED(bold, italic);
       char temp[2] = {c, '\0'};
-      int char_w = u8g2.getStrWidth(temp);
+      int char_w = getFastOledCharWidth(c, bold, italic, false);
 
       // Only draw if on screen
       if (xpos + char_w >= 0 && xpos <= display_w) {
