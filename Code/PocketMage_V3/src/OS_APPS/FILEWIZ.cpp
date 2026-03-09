@@ -31,6 +31,7 @@ void FILEWIZ_INIT() {
   newState = true;
 }
 
+
 // OLED file display
 struct FileObject {
   String address;    // Full path, e.g. "/files/test.txt"
@@ -331,6 +332,75 @@ String fileWizardMini(bool allowRecentSelect, String rootDir, char inchar_) {
   return "";
 }
 
+
+// EInk file display
+struct MetaEntry {
+  String path;
+  String timestampStr;
+};
+
+void updateRecentFilesList() {
+  std::vector<MetaEntry> recentFiles;
+  
+  keypad.disableInterrupts();
+  File metaFile = global_fs->open("/sys/SDMMC_META.txt", FILE_READ);
+  
+  if (metaFile) {
+    while (metaFile.available()) {
+      String line = metaFile.readStringUntil('\n');
+      line.trim();
+      
+      // Skip empty lines or malformed lines
+      if (line.length() == 0 || line.indexOf('|') == -1) continue;
+      
+      int firstPipe = line.indexOf('|');
+      int secondPipe = line.indexOf('|', firstPipe + 1);
+      
+      if (firstPipe > 0 && secondPipe > firstPipe) {
+        String path = line.substring(0, firstPipe);
+        String timeStr = line.substring(firstPipe + 1, secondPipe);
+        
+        // Remove the hyphen for clean string comparison sorting
+        timeStr.replace("-", ""); 
+        
+        // Check against the global excludedPaths vector
+        bool skip = false;
+        for (const String& ex : excludedPaths) {
+          // Check if it's the exact path OR inside the excluded directory
+          if (path.equalsIgnoreCase(ex) || path.startsWith(ex + "/")) {
+            skip = true;
+            break;
+          }
+        }
+        
+        if (!skip) {
+           recentFiles.push_back({path, timeStr});
+        }
+      }
+    }
+    metaFile.close();
+  }
+  keypad.enableInterrupts();
+
+  // Sort descending (newest first) using String comparison
+  std::sort(recentFiles.begin(), recentFiles.end(), [](const MetaEntry& a, const MetaEntry& b) {
+    return a.timestampStr.compareTo(b.timestampStr) > 0;
+  });
+
+  // Update the global file list array
+  int displayCount = min((int)recentFiles.size(), 10);
+  for (int i = 0; i < displayCount; i++) {
+    PM_SDAUTO().setFilesListIndex(i, recentFiles[i].path);
+  }
+  
+  // Clear any unused slots
+  for (int i = displayCount; i < 10; i++) {
+    PM_SDAUTO().setFilesListIndex(i, "-");
+  }
+}
+
+
+// Main loops
 void processKB_FILEWIZ() {
   OLED().setPowerSave(false);
   int currentMillis = millis();
@@ -625,18 +695,24 @@ void einkHandler_FILEWIZ() {
         EINK().drawStatusBar("Select a File (0-9)");
         display.drawBitmap(0, 0, fileWizardallArray[0], 320, 218, GxEPD_BLACK);
 
-        // DRAW FILE LIST
-        // TODO: Replace this with displaying the 10 most recent files from SDMMC_META
-        keypad.disableInterrupts();
-        PM_SDAUTO().listDir(*global_fs, "/notes");
-        keypad.enableInterrupts();
+        // Update the backend array with the newest files
+        updateRecentFilesList();
 
-        for (int i = 0; i < MAX_FILES; i++) {
-          display.setCursor(30, 54+(17*i));
-          display.print(PM_SDAUTO().getFilesListIndex(i));
+        // Draw the file list
+        for (int i = 0; i < 10; i++) {
+          String dispPath = PM_SDAUTO().getFilesListIndex(i);
+          
+          if (dispPath != "-") {
+            // Truncate long paths for the UI
+            if (dispPath.length() > 30) {
+               dispPath = "..." + dispPath.substring(dispPath.length() - 27);
+            }
+            
+            display.setCursor(30, 54 + (17 * i));
+            display.print(dispPath);
+          }
         }
 
-        //EINK().refresh();
         EINK().multiPassRefresh(2);
       }
       break;
