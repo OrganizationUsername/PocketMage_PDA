@@ -1693,22 +1693,20 @@ void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
       }
       
       u8g2.setFont(u8g2_font_5x7_tf);
-      char temp[2] = {'*', '\0'};
       int w = getFastOledCharWidth('*', false, false, true);
       
-      // Only draw if on screen
       if (xpos + w >= 0 && xpos <= display_w) {
-        u8g2.drawStr(xpos, 8, temp);
+        // FAST: Render glyph directly
+        u8g2.drawGlyph(xpos, 8, '*'); 
       }
       xpos += w;
     } else {
       setFontOLED(bold, italic);
-      char temp[2] = {c, '\0'};
       int char_w = getFastOledCharWidth(c, bold, italic, false);
 
-      // Only draw if on screen
       if (xpos + char_w >= 0 && xpos <= display_w) {
-        u8g2.drawStr(xpos, 20, temp);
+        // FAST: Render glyph directly
+        u8g2.drawGlyph(xpos, 20, c); 
       }
       
       xpos += char_w;
