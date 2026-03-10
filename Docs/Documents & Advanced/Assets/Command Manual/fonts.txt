@@ -1,0 +1,3 @@
+Title: Century, bold, 22
+Subtitle: Georgia, 13
+Key Legend: Calibri, bold, 29
