@@ -1,4 +1,3 @@
-
 #include <globals.h>
 #include <ESP32-targz.h>
 #include <Update.h>
@@ -66,6 +65,7 @@ bool copyFile(fs::FS &fs, const char *src, const char *dst) {
   out.close();
   return true;
 }
+
 // ---------- Place this at the top of the .cpp file, before installTask ----------
 void copyDirRecursive(File src, const String &assetsSrc, const String &assetsDst) {
     while (true) {
@@ -94,6 +94,9 @@ void copyDirRecursive(File src, const String &assetsSrc, const String &assetsDst
             }
         }
         entry.close();
+        
+        // FIX 2: Feed the watchdog timer during large asset copies
+        vTaskDelay(1); 
     }
 }
 
@@ -174,22 +177,22 @@ bool loadAppInfo(int otaIndex, AppInfo &info) {
 void loadAndDrawAppIcon(int x, int y, int otaIndex, bool showName, int maxNameChars) {
   pocketmage::setCpuSpeed(240);
 
-	AppInfo app;
-	if (!loadAppInfo(otaIndex, app)) return;
-	if (!global_fs->exists(app.iconPath)) return;
+  AppInfo app;
+  if (!loadAppInfo(otaIndex, app)) return;
+  if (!global_fs->exists(app.iconPath)) return;
 
-	File f = global_fs->open(app.iconPath, "r");
-	if (!f) return;
+  File f = global_fs->open(app.iconPath, "r");
+  if (!f) return;
 
-	uint8_t buf[40 * 5]; // 40x40 1-bit = 200 bytes
-	if (f.read(buf, sizeof(buf)) != sizeof(buf)) { f.close(); return; }
-	f.close();
+  uint8_t buf[40 * 5]; // 40x40 1-bit = 200 bytes
+  if (f.read(buf, sizeof(buf)) != sizeof(buf)) { f.close(); return; }
+  f.close();
 
   display.fillRect(x, y, 40, 40, GxEPD_WHITE);
 
-	display.drawBitmap(x, y, buf, 40, 40, GxEPD_BLACK);
+  display.drawBitmap(x, y, buf, 40, 40, GxEPD_BLACK);
 
-	if (showName) {
+  if (showName) {
     // Make a copy and truncate
     String appNameStr = String(app.name);
     if (appNameStr.length() > maxNameChars) {
@@ -208,7 +211,7 @@ void loadAndDrawAppIcon(int x, int y, int otaIndex, bool showName, int maxNameCh
 
     display.setCursor(tx, ty);
     display.print(appNameStr);
-	}
+  }
 
   if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 }
@@ -257,68 +260,72 @@ bool cleanupAppsTempRecursive(fs::FS &fs, const String &dirPath) {
 
 // ---------- Install Task ----------
 
+// FIX 1: Provide a deep-copy buffer so the RTOS task doesn't read dead memory
 struct InstallTaskParams {
-    const char *tarRelName;
+    char tarRelName[128];
     int otaIndex; // 1..4
 };
 
 static void installTask(void *param) {
-	pocketmage::setCpuSpeed(240);
+  pocketmage::setCpuSpeed(240);
 
-	InstallTaskParams *p = (InstallTaskParams *)param;
-	g_installProgress = 0;
-	g_installDone = false;
-	g_installFailed = false;
+  InstallTaskParams *p = (InstallTaskParams *)param;
+  g_installProgress = 0;
+  g_installDone = false;
+  g_installFailed = false;
 
-	//String tarPath = String(APP_DIRECTORY) + "/" + p->tarRelName;
   String tarPath = pathJoin(APP_DIRECTORY, p->tarRelName);
 
-	// --- Check TAR exists ---
-	if (!global_fs->exists(tarPath.c_str())) {
-		Serial.printf("Tar not found: %s\n", tarPath.c_str());
+  // --- Check TAR exists ---
+  if (!global_fs->exists(tarPath.c_str())) {
+    Serial.printf("Tar not found: %s\n", tarPath.c_str());
     if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
-		g_installFailed = true;
-		g_installDone = true;
-		delete p;
-		vTaskDelete(NULL);
-	}
+    g_installFailed = true;
+    g_installDone = true;
+    delete p;
+    vTaskDelete(NULL);
+  }
 
-	// --- Ensure directories ---
-	if (!ensureDir(*global_fs, APP_DIRECTORY) ||
-		//!rmRF(*global_fs, TEMP_DIR) ||
-		!ensureDir(*global_fs, TEMP_DIR)) {
-		Serial.println("Failed to prepare TEMP_DIR");
+  // --- Ensure directories ---
+  if (!ensureDir(*global_fs, APP_DIRECTORY) ||
+    !ensureDir(*global_fs, TEMP_DIR)) {
+    Serial.println("Failed to prepare TEMP_DIR");
     if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
-		g_installFailed = true;
-		g_installDone = true;
-		delete p;
-		vTaskDelete(NULL);
-	}
+    g_installFailed = true;
+    g_installDone = true;
+    delete p;
+    vTaskDelete(NULL);
+  }
 
-	// --- TAR extraction ---
-	TarUnpacker unpacker;
-	unpacker.haltOnError(true);
-	unpacker.setTarProgressCallback([](uint8_t progress) {
-		g_installProgress = progress / 2; // 0–50% for extraction
-	});
+  // --- TAR extraction ---
+  TarUnpacker unpacker;
+  unpacker.haltOnError(true);
+  unpacker.setTarProgressCallback([](uint8_t progress) {
+    uint8_t mappedProgress = progress / 2; // 0–50% for extraction
+    
+    // Never let the bar go backwards.
+    if (mappedProgress > g_installProgress) {
+        g_installProgress = mappedProgress;
+    }
+  });
 
-	if (!unpacker.tarExpander(*global_fs, tarPath.c_str(), *global_fs, TEMP_DIR)) {
-		Serial.printf("Extraction failed (err=%d)\n", unpacker.tarGzGetError());
+  if (!unpacker.tarExpander(*global_fs, tarPath.c_str(), *global_fs, TEMP_DIR)) {
+    Serial.printf("Extraction failed (err=%d)\n", unpacker.tarGzGetError());
 
     if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 
-		g_installFailed = true;
-		g_installDone = true;
-		delete p;
-		vTaskDelete(NULL);
-	}
+    g_installFailed = true;
+    g_installDone = true;
+    delete p;
+    vTaskDelete(NULL);
+  }
 
-	g_installProgress = 50; // halfway
+  g_installProgress = 50; // halfway
 
 // --- Determine main .bin and base name ---
 String binPath = "";
 String base = "";
-	// --- Determine icon path ---
+  // --- Determine icon path ---
 String iconPath = "";
 String expectedIcon = base + "_ICON.bin";
 
@@ -411,7 +418,7 @@ if (binPath.length() == 0 || !global_fs->exists(binPath.c_str())) {
     vTaskDelete(NULL);
 }
 
-delay(100);
+vTaskDelay(pdMS_TO_TICKS(100)); // Safe wait
 
 // --- Copy assets folder ---
 String assetsSrc = pathJoin(TEMP_DIR, "assets");
@@ -432,85 +439,85 @@ if (global_fs->exists(assetsSrc.c_str())) {
 }
 
 
-	// --- OTA flashing ---
-	const esp_partition_t *partition = esp_partition_find_first(
-		ESP_PARTITION_TYPE_APP,
-		(esp_partition_subtype_t)(ESP_PARTITION_SUBTYPE_APP_OTA_MIN + p->otaIndex),
-		nullptr);
+  // --- OTA flashing ---
+  const esp_partition_t *partition = esp_partition_find_first(
+    ESP_PARTITION_TYPE_APP,
+    (esp_partition_subtype_t)(ESP_PARTITION_SUBTYPE_APP_OTA_MIN + p->otaIndex),
+    nullptr);
 
-	if (!partition) {
-		Serial.printf("OTA_%d partition not found\n", p->otaIndex);
-
-    cleanupAppsTempRecursive(*global_fs, TEMP_DIR);
-    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
-
-		g_installFailed = true;
-		g_installDone = true;
-		delete p;
-		vTaskDelete(NULL);
-	}
-
-	File f = global_fs->open(binPath, "r");
-	if (!f) {
-		Serial.printf("Failed to open: %s\n", binPath.c_str());
+  if (!partition) {
+    Serial.printf("OTA_%d partition not found\n", p->otaIndex);
 
     cleanupAppsTempRecursive(*global_fs, TEMP_DIR);
     if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 
-		g_installFailed = true;
-		g_installDone = true;
-		delete p;
-		vTaskDelete(NULL);
-	}
+    g_installFailed = true;
+    g_installDone = true;
+    delete p;
+    vTaskDelete(NULL);
+  }
 
-	uint32_t sz = f.size();
-	Serial.printf("Flashing %s (%u bytes) -> OTA_%d @ 0x%08x\n",
-				  binPath.c_str(), sz, p->otaIndex, partition->address);
+  File f = global_fs->open(binPath, "r");
+  if (!f) {
+    Serial.printf("Failed to open: %s\n", binPath.c_str());
 
-	esp_ota_handle_t ota_handle;
-	esp_err_t err = esp_ota_begin(partition, sz, &ota_handle);
-	if (err != ESP_OK) {
-		Serial.printf("esp_ota_begin failed: %s\n", esp_err_to_name(err));
-		f.close();
+    cleanupAppsTempRecursive(*global_fs, TEMP_DIR);
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+
+    g_installFailed = true;
+    g_installDone = true;
+    delete p;
+    vTaskDelete(NULL);
+  }
+
+  uint32_t sz = f.size();
+  Serial.printf("Flashing %s (%u bytes) -> OTA_%d @ 0x%08x\n",
+          binPath.c_str(), sz, p->otaIndex, partition->address);
+
+  esp_ota_handle_t ota_handle;
+  esp_err_t err = esp_ota_begin(partition, sz, &ota_handle);
+  if (err != ESP_OK) {
+    Serial.printf("esp_ota_begin failed: %s\n", esp_err_to_name(err));
+    f.close();
     
     cleanupAppsTempRecursive(*global_fs, TEMP_DIR);
     if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 
-		g_installFailed = true;
-		g_installDone = true;
-		delete p;
-		vTaskDelete(NULL);
-	}
+    g_installFailed = true;
+    g_installDone = true;
+    delete p;
+    vTaskDelete(NULL);
+  }
 
-	uint8_t buf[4096];
-	uint32_t written = 0;
-	while (f.available()) {
-		size_t rd = f.read(buf, sizeof(buf));
-		err = esp_ota_write(ota_handle, buf, rd);
-		if (err != ESP_OK) {
-			Serial.printf("esp_ota_write failed: %s\n", esp_err_to_name(err));
-			esp_ota_abort(ota_handle);
-			f.close();
+  uint8_t buf[4096];
+  uint32_t written = 0;
+  while (f.available()) {
+    size_t rd = f.read(buf, sizeof(buf));
+    err = esp_ota_write(ota_handle, buf, rd);
+    if (err != ESP_OK) {
+      Serial.printf("esp_ota_write failed: %s\n", esp_err_to_name(err));
+      esp_ota_abort(ota_handle);
+      f.close();
 
       cleanupAppsTempRecursive(*global_fs, TEMP_DIR);
         if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 
-			g_installFailed = true;
-			g_installDone = true;
-			delete p;
-			vTaskDelete(NULL);
-		}
-		written += rd;
-		g_installProgress = 50 + (written * 50 / sz); // 50–100% flashing
-	}
+      g_installFailed = true;
+      g_installDone = true;
+      delete p;
+      vTaskDelete(NULL);
+    }
+    written += rd;
+    g_installProgress = 50 + (written * 50 / sz); // 50–100% flashing
+  }
 
-	f.close();
-	err = esp_ota_end(ota_handle);
-	if (err != ESP_OK) {
-		Serial.printf("esp_ota_end failed: %s\n", esp_err_to_name(err));
-		g_installFailed = true;
-	} else {
-		Serial.println("Flash OK");
+  f.close();
+  err = esp_ota_end(ota_handle);
+  if (err != ESP_OK) {
+    Serial.printf("esp_ota_end failed: %s\n", esp_err_to_name(err));
+    g_installFailed = true;
+  } else {
+    Serial.println("Flash OK");
 
 
 if (iconPath.length() == 0) {
@@ -521,30 +528,33 @@ if (iconPath.length() == 0) {
 
 
 
-		// --- Save AppInfo ---
-		AppInfo info = {};
-		strncpy(info.name, base.c_str(), sizeof(info.name)-1);
-		strncpy(info.tarPath, tarPath.c_str(), sizeof(info.tarPath)-1);
-		strncpy(info.iconPath, iconPath.c_str(), sizeof(info.iconPath)-1);
+    // --- Save AppInfo ---
+    AppInfo info = {};
+    strncpy(info.name, base.c_str(), sizeof(info.name)-1);
+    strncpy(info.tarPath, tarPath.c_str(), sizeof(info.tarPath)-1);
+    strncpy(info.iconPath, iconPath.c_str(), sizeof(info.iconPath)-1);
 
-		if (!saveAppInfo(p->otaIndex, info)) {
-			Serial.printf("Failed to save AppInfo for OTA_%d\n", p->otaIndex);
-		}
-	}
+    if (!saveAppInfo(p->otaIndex, info)) {
+      Serial.printf("Failed to save AppInfo for OTA_%d\n", p->otaIndex);
+    }
+  }
 
   cleanupAppsTempRecursive(*global_fs, TEMP_DIR);
   if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 
-	g_installProgress = 100;
-	g_installDone = true;
+  g_installProgress = 100;
+  g_installDone = true;
 
-	delete p;
-	vTaskDelete(NULL);
+  delete p;
+  vTaskDelete(NULL);
 }
 
 // ---------- Async API ----------
 bool installAppTarToOtaAsync(const char *tarRelName, int otaIndex) {
-    auto *params = new InstallTaskParams{tarRelName, otaIndex};
+    auto *params = new InstallTaskParams;
+    strncpy(params->tarRelName, tarRelName, sizeof(params->tarRelName) - 1);
+    params->tarRelName[sizeof(params->tarRelName) - 1] = '\0';
+    params->otaIndex = otaIndex;
 
     BaseType_t res = xTaskCreate(
         installTask,
@@ -605,20 +615,6 @@ void drawProgressBar(uint8_t progress) {
   u8g2.drawRFrame(20, 3, 216, 16, 5);
   // Draw progress bar
   if (progressPx > 10) u8g2.drawRBox(20, 3, progressPx, 16, 5);
-  /*// Draw sawtooth animation
-  uint period = 1000;
-  uint x1 = map(millis() % period, 0, period, 0, progressPx);
-  uint x2 = map((millis() + period / 4) % period, 0, period, 0, progressPx);
-  uint x3 = map((millis() + period / 2) % period, 0, period, 0, progressPx);
-  uint x4 = map((millis() + (3 * period) / 4) % period, 0, period, 0, progressPx);
-
-  // Draw scrolling box
-  u8g2.setDrawColor(0);
-  u8g2.drawBox(20+x1, 10, 2, 2);
-  u8g2.drawBox(20+x2, 10, 2, 2);
-  u8g2.drawBox(20+x3, 10, 2, 2);
-  u8g2.drawBox(20+x4, 10, 2, 2);
-  u8g2.setDrawColor(1);*/
 
   // Show text
   String progressText = "";
@@ -656,26 +652,22 @@ void processKB_APPLOADER() {
         else if (inchar == 13) {                          
           currentLine.toLowerCase();
           if (currentLine == "a") {
-            // edit a
             selectedSlot = 1;
           }
           else if (currentLine == "b") {
-            // edit b
             selectedSlot = 2;
           }
           else if (currentLine == "c") {
-            // edit c
             selectedSlot = 3;
           }
           else if (currentLine == "d") {
-            // edit d
             selectedSlot = 4;
           }
           CurrentAppLoaderState = SWAP_OR_EDIT;
           KB().setKeyboardState(NORMAL);
 
           currentLine = "";
-        }                                      
+        }                                       
         //SHIFT Recieved
         else if (inchar == 17) {
           if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) {
@@ -765,7 +757,7 @@ void processKB_APPLOADER() {
           // Return to menu
           newState = true;
           CurrentAppLoaderState = MENU;
-          delay(2000);
+          vTaskDelay(pdMS_TO_TICKS(2000));
         }
         
         // Home recieved
@@ -784,7 +776,7 @@ void processKB_APPLOADER() {
       }
       break;
     case SWAP:
-      outPath = fileWizardMini(false, APP_DIRECTORY);
+      outPath = fileWizardMini(false, APP_DIRECTORY, 0);
       if (outPath == "_EXIT_") {
         // Return to menu
         CurrentAppLoaderState = MENU;
@@ -807,7 +799,7 @@ void processKB_APPLOADER() {
           CurrentAppLoaderState = INSTALLING;
         } else {
           OLED().oledWord("Not a .tar file!");
-          delay(2000);
+          vTaskDelay(pdMS_TO_TICKS(2000));
           CurrentAppLoaderState = MENU;
         }
       }
@@ -817,14 +809,14 @@ void processKB_APPLOADER() {
       if (!g_installDone) {
         drawProgressBar(g_installProgress);
       } else {
-        delay(500);
+        vTaskDelay(pdMS_TO_TICKS(500));
         if (g_installFailed) {
           OLED().oledWord("Install failed!");
         } 
         else {
           OLED().oledWord("Install complete!");
         }
-        delay(2000);
+        vTaskDelay(pdMS_TO_TICKS(2000));
         newState = true;
         CurrentAppLoaderState = MENU;
       }
