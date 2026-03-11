@@ -1,11 +1,3 @@
-//  oooooooooooo ooooo ooooo        oooooooooooo oooooo   oooooo     oooo ooooo  oooooooooooo  //
-//  `888'     `8 `888' `888'        `888'     `8  `888.    `888.     .8'  `888' d'""""""d888'  //
-//   888          888   888          888           `888.   .8888.   .8'    888        .888P    //
-//   888oooo8     888   888          888oooo8       `888  .8'`888. .8'     888       d888'     //
-//   888    "     888   888          888    "        `888.8'  `888.8'      888     .888P       //
-//   888          888   888       o  888       o      `888'    `888'       888    d888'    .P  //
-//  o888o        o888o o888ooooood8 o888ooooood8       `8'      `8'       o888o .8888888888P   //
-
 #include <globals.h>
 #if !OTA_APP // POCKETMAGE_OS
 
