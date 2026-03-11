@@ -49,6 +49,8 @@ void updateEventArray() {
   File file = global_fs->open("/sys/events.txt", "r"); // Open the text file in read mode
   if (!file) {
     ESP_LOGE(TAG, "Failed to open file for reading: %s", file.path());
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    SDActive = false;
     return;
   }
 
