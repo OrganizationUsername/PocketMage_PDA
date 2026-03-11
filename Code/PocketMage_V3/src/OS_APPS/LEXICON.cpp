@@ -1,4 +1,3 @@
-
 #include <globals.h>
 #if !OTA_APP  // POCKETMAGE_OS
 enum LexState { MENU, DEF };
@@ -128,7 +127,12 @@ void loadDefinitions(String input) {
 
   word.toLowerCase();
 
+  int lineScanCount = 0; // FIX 2: Used to pet the Watchdog
+
   while (file.available()) {
+    // FIX 2: Feed the Watchdog Timer to prevent reboot loops on huge dictionary files
+    if (++lineScanCount % 100 == 0) yield(); 
+
     String line = file.readStringUntil('\n');
     line.trim();
     if (line.length() == 0)
@@ -149,7 +153,7 @@ void loadDefinitions(String input) {
     if (keyLower.startsWith(word)) {
       defList.push_back({key, def});
     } else if (!defList.empty()) {
-      // No more definitions for this word
+      // No more definitions for this word (Dictionary is alphabetically sorted)
       break;
     }
   }
@@ -159,6 +163,11 @@ void loadDefinitions(String input) {
   if (defList.empty()) {
     OLED().oledWord("No definitions found");
     delay(2000);
+    
+    // FIX 1: Safely return to MENU state so empty defList isn't drawn by DEF state
+    CurrentLexState = MENU; 
+    newState = true;
+
   } else {
     CurrentLexState = DEF;
     KB().setKeyboardState(NORMAL);
@@ -204,7 +213,7 @@ void processKB_LEXICON() {
           loadDefinitions(currentLine);
           currentLine = "";
           cursor_pos = 0;
-        }                                      
+        }                                       
         // SHIFT Recieved
         else if (inchar == 17) {
           if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) {
@@ -347,6 +356,9 @@ void einkHandler_LEXICON() {
     case DEF:
       if (newState) {
         newState = false;
+        
+        // FIX 3: Clear the e-ink buffer properly before drawing the UI
+        EINK().resetDisplay(); 
 
         display.drawBitmap(0, 0, _lex1, 320, 218, GxEPD_BLACK);
         display.setTextColor(GxEPD_BLACK);
@@ -421,5 +433,4 @@ void einkHandler_LEXICON() {
       break;
   }
 }
-
 #endif

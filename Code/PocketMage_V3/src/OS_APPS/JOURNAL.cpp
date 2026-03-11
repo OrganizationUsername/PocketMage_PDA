@@ -1,4 +1,3 @@
-
 #include <globals.h>
 #if !OTA_APP // POCKETMAGE_OS
 enum JournalState {J_MENU, J_TXT};
