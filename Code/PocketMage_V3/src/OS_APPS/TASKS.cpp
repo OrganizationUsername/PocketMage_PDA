@@ -39,7 +39,6 @@ void sortTasksByDueDate(std::vector<std::vector<String>> &tasks) {
 void updateTasksFile() {
   SDActive = true;
   pocketmage::setCpuSpeed(240);
-  delay(50);
   // Clear the existing tasks file first
   PM_SDAUTO().delFile("/sys/tasks.txt");
 
@@ -112,7 +111,6 @@ void updateTaskArray() {
   SDActive = false;
 }
 
-
 void deleteTask(int index) {
   if (index >= 0 && index < tasks.size()) {
     tasks.erase(tasks.begin() + index);
@@ -138,6 +136,9 @@ void processKB_TASKS() {
   disableTimeout = false;
   char inchar;
 
+  String input = "";
+  String prompt = "";
+
   switch (CurrentTasksState) {
     case TASKS0:
       KB().setKeyboardState(FUNC);
@@ -156,7 +157,6 @@ void processKB_TASKS() {
           CurrentTasksState = TASKS0_NEWTASK;
           KB().setKeyboardState(NORMAL);
           newTaskState = 0;
-          newState = true;
           break;
         }
         // SELECT A TASK
@@ -185,96 +185,63 @@ void processKB_TASKS() {
     case TASKS0_NEWTASK:
       if (newTaskState == 1) KB().setKeyboardState(FUNC);
 
-      if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {  
-        inchar = KB().updateKeypress();
-        // HANDLE INPUTS
-        //No char recieved
-        if (inchar == 0);                                        
-        //SHIFT Recieved
-        else if (inchar == 17) {
-          if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) {
-            KB().setKeyboardState(NORMAL);
-          } else if (KB().getKeyboardState() == FUNC) {
-            KB().setKeyboardState(FN_SHIFT);
-          } else {
-            KB().setKeyboardState(SHIFT);
-          }
-        }
-        // FN Recieved
-        else if (inchar == 18) {
-          if (KB().getKeyboardState() == FUNC || KB().getKeyboardState() == FN_SHIFT) {
-            KB().setKeyboardState(NORMAL);
-          } else if (KB().getKeyboardState() == SHIFT) {
-            KB().setKeyboardState(FN_SHIFT);
-          } else {
-            KB().setKeyboardState(FUNC);
-          }
-        }
-        //Space Recieved
-        else if (inchar == 32) {                                  
-          currentLine += " ";
-        }
-        //ESC / CLEAR Recieved
-        else if (inchar == 20) {                                  
-          currentLine = "";
-        }
-        //BKSP Recieved
-        else if (inchar == 8 || inchar == 12) {                  
-          if (currentLine.length() > 0) {
-            currentLine.remove(currentLine.length() - 1);
-          }
-        }
-        //ENTER Recieved
-        else if (inchar == 13) {                          
-          // ENTER INFORMATION BASED ON STATE
-          switch (newTaskState) {
-            case 0: // ENTER TASK NAME
-              newTaskName = currentLine;
-              currentLine = "";
-              newTaskState = 1;
+      // Choose the current prompt
+      switch (newTaskState) {
+        case 0:
+          prompt = "Enter Task Name:";
+          break;
+        case 1:
+          prompt = "Enter Due Date: (YYYYMMDD) or (T)oday";
+          break;
+      }
+
+      input = textPrompt(prompt);
+      if (input != "_EXIT_") {           
+        // ENTER INFORMATION BASED ON STATE
+        switch (newTaskState) {
+          case 0: // ENTER TASK NAME
+            newTaskName = input;
+            newTaskState = 1;
+            break;
+          case 1: // ENTER DUE DATE
+            String testDate = "";
+            if (input == "t" || input == "T") {
+              DateTime now = CLOCK().nowDT();
+              
+              String y = String(now.year());
+              String m = (now.month() < 10 ? "0" : "") + String(now.month());
+              String d = (now.day() < 10 ? "0" : "") + String(now.day());
+              
+              input = y + m + d;
+              testDate = convertDateFormat(input);
+            }
+            else {
+              testDate = convertDateFormat(input);
+            }
+
+            // DATE IS VALID
+            if (testDate != "Invalid") {
+              newTaskDueDate = input;
+
+              // ADD NEW TASK
+              addTask(newTaskName, newTaskDueDate, "0", "0");
+              OLED().oledWord("New Task Added");
+              delay(1000);
+
+              // RETURN
+              newTaskState = 0;
+              CurrentTasksState = TASKS0;
               newState = true;
-              break;
-            case 1: // ENTER DUE DATE
-              String testDate = convertDateFormat(currentLine);
-              // DATE IS VALID
-              if (testDate != "Invalid") {
-                newTaskDueDate = currentLine;
-
-                // ADD NEW TASK
-                addTask(newTaskName, newTaskDueDate, "0", "0");
-                OLED().oledWord("New Task Added");
-                delay(1000);
-
-                // RETURN
-                currentLine = "";
-                newTaskState = 0;
-                CurrentTasksState = TASKS0;
-                newState = true;
-              }
-              // DATE IS INVALID
-              else {
-                OLED().oledWord("Invalid Date");
-                delay(1000);
-                currentLine = "";
-              }
-              break;
-          }
-        } 
-
-        else {
-          currentLine += inchar;
-          if (inchar >= 48 && inchar <= 57) {}  //Only leave FN on if typing numbers
-          else if (KB().getKeyboardState() != NORMAL) {
-            KB().setKeyboardState(NORMAL);
-          }
+            }
+            // DATE IS INVALID
+            else {
+              OLED().oledWord("Invalid Date");
+              delay(1000);
+            }
+            break;
         }
-
-        currentMillis = millis();
-        //Make sure oled only updates at 60fps
-        if (currentMillis - OLEDFPSMillis >= (1000/OLED_MAX_FPS)) {
-          OLEDFPSMillis = currentMillis;
-          OLED().oledLine(currentLine, currentLine.length(), false);
-        }
+      } else {
+        CurrentTasksState = TASKS0;
       }
       break;
     case TASKS1:
@@ -297,21 +264,75 @@ void processKB_TASKS() {
         // SELECT A TASK
         else if (inchar >= '1' && inchar <= '4') {
           if (inchar == '1') {      // RENAME TASK
+            KB().setKeyboardState(NORMAL);
+            input = textPrompt("Enter a new task name:");
+            if (input != "_EXIT_") {
+              OLED().oledWord("updating task...");
+              tasks[selectedTask][0] = input;
+              updateTasksFile();
 
+              CurrentTasksState = TASKS0;
+              EINK().forceSlowFullUpdate(true);
+              newState = true;
+            }
           }
           else if (inchar == '2') { // CHANGE DUE DATE
+            input = textPrompt("Enter Due Date: (YYYYMMDD) or (T)oday");
 
+            String testDate = "";
+            if (input == "t" || input == "T") {
+              DateTime now = CLOCK().nowDT();
+              
+              String y = String(now.year());
+              String m = (now.month() < 10 ? "0" : "") + String(now.month());
+              String d = (now.day() < 10 ? "0" : "") + String(now.day());
+              
+              input = y + m + d;
+              testDate = convertDateFormat(input);
+            }
+            else {
+              testDate = convertDateFormat(input);
+            }
+
+            // DATE IS VALID
+            if (testDate != "Invalid") {
+              OLED().oledWord("updating task...");
+              newTaskDueDate = input;
+
+              // UPDATE DUE DATE
+              tasks[selectedTask][1] = newTaskDueDate;
+              updateTasksFile();
+
+              // RETURN
+              CurrentTasksState = TASKS0;
+              EINK().forceSlowFullUpdate(true);
+              newState = true;
+            }
+            // DATE IS INVALID
+            else {
+              OLED().oledWord("Invalid Date");
+              delay(1000);
+            }
           }
           else if (inchar == '3') { // DELETE TASK
-            deleteTask(selectedTask);
-            updateTasksFile();
-            
+            int response = boolPrompt("Delete Task?");
+            if (response == 1) {
+              OLED().oledWord("deleting...");
+              deleteTask(selectedTask);
+              updateTasksFile();
+
+              CurrentTasksState = TASKS0;
+              EINK().forceSlowFullUpdate(true);
+              newState = true;
+            }
+          }
+          else if (inchar == '4') { // COPY TASK
+            OLED().oledWord("copying...");
+            addTask(tasks[selectedTask][0]+"_COPY", tasks[selectedTask][1], "0", "0");
+
             CurrentTasksState = TASKS0;
             EINK().forceSlowFullUpdate(true);
             newState = true;
-          }
-          else if (inchar == '4') { // COPY TASK
-
           }
           
         }
