@@ -2,9 +2,9 @@
 // 8'   888   `8      .888.      d8P'    `Y8 `888   .8P'  d8P'    `Y8 //
 //      888          .8"888.     Y88bo.       888  d8'    Y88bo.      //
 //      888         .8' `888.     `"Y8888o.   88888[       `"Y8888o.  //
-//      888        .88ooo8888.        `"Y88b  888`88b.         `"Y88b //
+//      888        .88ooo8888.         `"Y88b  888`88b.         `"Y88b //
 //      888       .8'     `888.  oo     .d8P  888  `88b.  oo     .d8P //
-//     o888o     o88o     o8888o 8""88888P'  o888o  o888o 8""88888P'  //  
+//     o888o     o88o      o8888o 8""88888P'  o888o  o888o 8""88888P'  //  
 
 #include <globals.h>
 #include "esp32-hal-log.h"
@@ -42,18 +42,32 @@ void updateTasksFile() {
   // Clear the existing tasks file first
   PM_SDAUTO().delFile("/sys/tasks.txt");
 
-  pocketmage::setCpuSpeed(240);
-  if (!global_fs->exists("/sys/tasks.txt")) {
-    File f = global_fs->open("/sys/tasks.txt", FILE_WRITE);
-    if (f) f.close();
-  }
-  // Iterate through the tasks vector and append each task to the file
-  for (size_t i = 0; i < tasks.size(); i++) {
-    // Create a string from the task's attributes with "|" delimiter
-    String taskInfo = tasks[i][0] + "|" + tasks[i][1] + "|" + tasks[i][2] + "|" + tasks[i][3];
-    
-    // Append the task info to the file
-    PM_SDAUTO().appendToFile("/sys/tasks.txt", taskInfo);
+  const char* tempFile = "/sys/tasks.tmp";
+  const char* tasksFile = "/sys/tasks.txt";
+
+  // Stream directly to the file to prevent Heap fragmentation / OOM crashes
+  File file = global_fs->open(tempFile, FILE_WRITE);
+  if (file) {
+    for (size_t i = 0; i < tasks.size(); i++) {
+      file.print(tasks[i][0]);
+      file.print("|");
+      file.print(tasks[i][1]);
+      file.print("|");
+      file.print(tasks[i][2]);
+      file.print("|");
+      file.println(tasks[i][3]); // println adds the newline
+    }
+    file.close();
+
+    // Verify that the temp file was written correctly by checking its existence
+    if (global_fs->exists(tempFile)) {
+      PM_SDAUTO().deleteFile(*global_fs, tasksFile);
+      PM_SDAUTO().renameFile(*global_fs, tempFile, tasksFile);
+    }
+  } else {
+    ESP_LOGE(TAG, "Failed to write to temporary tasks file.");
+    OLED().oledWord("SAVE FAILED!");
+    delay(1000); 
   }
 
   if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
@@ -61,8 +75,7 @@ void updateTasksFile() {
 }
 
 void addTask(String taskName, String dueDate, String priority, String completed) {
-  String taskInfo = taskName+"|"+dueDate+"|"+priority+"|"+completed;
-  updateTaskArray();
+  // Removed updateTaskArray() here - it clears the array mid-operation!
   tasks.push_back({taskName, dueDate, priority, completed});
   sortTasksByDueDate(tasks);
   updateTasksFile();
@@ -71,10 +84,27 @@ void addTask(String taskName, String dueDate, String priority, String completed)
 void updateTaskArray() {
   SDActive = true;
   pocketmage::setCpuSpeed(240);
-  delay(50);
-  File file = global_fs->open("/sys/tasks.txt", "r"); // Open the text file in read mode
+
+  const char* tasksFile = "/sys/tasks.txt";
+
+  // If the file doesn't exist, create it to ensure the app can run on first launch
+  if (!global_fs->exists(tasksFile)) {
+    File f = global_fs->open(tasksFile, FILE_WRITE);
+    if (f) {
+        f.close();
+    } else {
+        ESP_LOGE(TAG, "Failed to create tasks file.");
+        if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+        SDActive = false;
+        return;
+    }
+  }
+
+  File file = global_fs->open(tasksFile, "r"); 
   if (!file) {
-    ESP_LOGE(TAG, "Failed to open file to read: %s", file.path());
+    ESP_LOGE(TAG, "Failed to open file to read: %s", tasksFile);
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    SDActive = false;
     return;
   }
 
@@ -82,18 +112,24 @@ void updateTaskArray() {
 
   // Loop through the file, line by line
   while (file.available()) {
-    String line = file.readStringUntil('\n');  // Read a line from the file
-    line.trim();  // Remove any extra spaces or newlines
+    String line = file.readStringUntil('\n');  
+    line.trim();  
     
     // Skip empty lines
     if (line.length() == 0) {
       continue;
     }
 
-    // Split the line into individual parts using the delimiter '|'
-    uint8_t delimiterPos1 = line.indexOf('|');
-    uint8_t delimiterPos2 = line.indexOf('|', delimiterPos1 + 1);
-    uint8_t delimiterPos3 = line.indexOf('|', delimiterPos2 + 1);
+    // FIX: Changed from uint8_t to int to prevent wrap-around bugs if '|' is missing
+    int delimiterPos1 = line.indexOf('|');
+    int delimiterPos2 = line.indexOf('|', delimiterPos1 + 1);
+    int delimiterPos3 = line.indexOf('|', delimiterPos2 + 1);
+
+    // Basic validation for substrings
+    if (delimiterPos1 == -1 || delimiterPos2 == -1 || delimiterPos3 == -1) {
+        ESP_LOGW(TAG, "Malformed line in tasks file: %s", line.c_str());
+        continue;
+    }
 
     // Extract task name, due date, priority, and completed status
     String taskName  = line.substring(0, delimiterPos1);
@@ -105,7 +141,7 @@ void updateTaskArray() {
     tasks.push_back({taskName, dueDate, priority, completed});
   }
 
-  file.close();  // Close the file
+  file.close(); 
 
   if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
   SDActive = false;
@@ -263,78 +299,81 @@ void processKB_TASKS() {
         }
         // SELECT A TASK
         else if (inchar >= '1' && inchar <= '4') {
-          if (inchar == '1') {      // RENAME TASK
-            KB().setKeyboardState(NORMAL);
-            input = textPrompt("Enter a new task name:");
-            if (input != "_EXIT_") {
-              OLED().oledWord("updating task...");
-              tasks[selectedTask][0] = input;
-              updateTasksFile();
+            
+          // FIX: Wrap inside a bounds check so background array shifts don't cause fatal exceptions
+          if (selectedTask >= 0 && selectedTask < tasks.size()) {
+              if (inchar == '1') {      // RENAME TASK
+                KB().setKeyboardState(NORMAL);
+                input = textPrompt("Enter a new task name:");
+                if (input != "_EXIT_") {
+                  OLED().oledWord("updating task...");
+                  tasks[selectedTask][0] = input;
+                  updateTasksFile();
 
-              CurrentTasksState = TASKS0;
-              EINK().forceSlowFullUpdate(true);
-              newState = true;
-            }
+                  CurrentTasksState = TASKS0;
+                  EINK().forceSlowFullUpdate(true);
+                  newState = true;
+                }
+              }
+              else if (inchar == '2') { // CHANGE DUE DATE
+                input = textPrompt("Enter Due Date: (YYYYMMDD) or (T)oday");
+
+                String testDate = "";
+                if (input == "t" || input == "T") {
+                  DateTime now = CLOCK().nowDT();
+                  
+                  String y = String(now.year());
+                  String m = (now.month() < 10 ? "0" : "") + String(now.month());
+                  String d = (now.day() < 10 ? "0" : "") + String(now.day());
+                  
+                  input = y + m + d;
+                  testDate = convertDateFormat(input);
+                }
+                else {
+                  testDate = convertDateFormat(input);
+                }
+
+                // DATE IS VALID
+                if (testDate != "Invalid") {
+                  OLED().oledWord("updating task...");
+                  newTaskDueDate = input;
+
+                  // UPDATE DUE DATE
+                  tasks[selectedTask][1] = newTaskDueDate;
+                  updateTasksFile();
+
+                  // RETURN
+                  CurrentTasksState = TASKS0;
+                  EINK().forceSlowFullUpdate(true);
+                  newState = true;
+                }
+                // DATE IS INVALID
+                else {
+                  OLED().oledWord("Invalid Date");
+                  delay(1000);
+                }
+              }
+              else if (inchar == '3') { // DELETE TASK
+                int response = boolPrompt("Delete Task?");
+                if (response == 1) {
+                  OLED().oledWord("deleting...");
+                  deleteTask(selectedTask);
+                  updateTasksFile();
+
+                  CurrentTasksState = TASKS0;
+                  EINK().forceSlowFullUpdate(true);
+                  newState = true;
+                }
+              }
+              else if (inchar == '4') { // COPY TASK
+                OLED().oledWord("copying...");
+                addTask(tasks[selectedTask][0]+"_COPY", tasks[selectedTask][1], "0", "0");
+
+                CurrentTasksState = TASKS0;
+                EINK().forceSlowFullUpdate(true);
+                newState = true;
+              }
           }
-          else if (inchar == '2') { // CHANGE DUE DATE
-            input = textPrompt("Enter Due Date: (YYYYMMDD) or (T)oday");
-
-            String testDate = "";
-            if (input == "t" || input == "T") {
-              DateTime now = CLOCK().nowDT();
-              
-              String y = String(now.year());
-              String m = (now.month() < 10 ? "0" : "") + String(now.month());
-              String d = (now.day() < 10 ? "0" : "") + String(now.day());
-              
-              input = y + m + d;
-              testDate = convertDateFormat(input);
-            }
-            else {
-              testDate = convertDateFormat(input);
-            }
-
-            // DATE IS VALID
-            if (testDate != "Invalid") {
-              OLED().oledWord("updating task...");
-              newTaskDueDate = input;
-
-              // UPDATE DUE DATE
-              tasks[selectedTask][1] = newTaskDueDate;
-              updateTasksFile();
-
-              // RETURN
-              CurrentTasksState = TASKS0;
-              EINK().forceSlowFullUpdate(true);
-              newState = true;
-            }
-            // DATE IS INVALID
-            else {
-              OLED().oledWord("Invalid Date");
-              delay(1000);
-            }
-          }
-          else if (inchar == '3') { // DELETE TASK
-            int response = boolPrompt("Delete Task?");
-            if (response == 1) {
-              OLED().oledWord("deleting...");
-              deleteTask(selectedTask);
-              updateTasksFile();
-
-              CurrentTasksState = TASKS0;
-              EINK().forceSlowFullUpdate(true);
-              newState = true;
-            }
-          }
-          else if (inchar == '4') { // COPY TASK
-            OLED().oledWord("copying...");
-            addTask(tasks[selectedTask][0]+"_COPY", tasks[selectedTask][1], "0", "0");
-
-            CurrentTasksState = TASKS0;
-            EINK().forceSlowFullUpdate(true);
-            newState = true;
-          }
-          
         }
 
         currentMillis = millis();
@@ -378,8 +417,7 @@ void einkHandler_TASKS() {
             display.setCursor(231, 54 + (17 * i));
             display.print(convertDateFormat(tasks[i][1]).c_str());
 
-            // Serial.print(tasks[i][0].c_str()); Serial.println(convertDateFormat(tasks[i][1]).c_str());
-            ESP_LOGI("TASKS", "%s, %s", tasks[i][0].c_str(), convertDateFormat(tasks[i][1]).c_str()); // TODO: Come up with some tag
+            ESP_LOGI("TASKS", "%s, %s", tasks[i][0].c_str(), convertDateFormat(tasks[i][1]).c_str()); 
           }
         }
         else EINK().drawStatusBar("No Tasks! Add New Task (N)");
@@ -412,8 +450,7 @@ void einkHandler_TASKS() {
               display.setCursor(231, 54 + (17 * i));
               display.print(convertDateFormat(tasks[i][1]).c_str());
 
-              // Serial.print(tasks[i][0].c_str()); Serial.println(convertDateFormat(tasks[i][1]).c_str());
-              ESP_LOGI("TASKS", "%s, %s", tasks[i][0].c_str(), convertDateFormat(tasks[i][1]).c_str()); // TODO: Come up with some tag
+              ESP_LOGI("TASKS", "%s, %s", tasks[i][0].c_str(), convertDateFormat(tasks[i][1]).c_str()); 
             }
           }
           switch (newTaskState) {
