@@ -40,7 +40,7 @@ void updateTasksFile() {
   SDActive = true;
   pocketmage::setCpuSpeed(240);
   // Clear the existing tasks file first
-  PM_SDAUTO().delFile("/sys/tasks.txt");
+  //PM_SDAUTO().delFile("/sys/tasks.txt");
 
   const char* tempFile = "/sys/tasks.tmp";
   const char* tasksFile = "/sys/tasks.txt";
