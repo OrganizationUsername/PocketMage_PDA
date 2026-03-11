@@ -1,4 +1,3 @@
-
 #include <globals.h>
 #if !OTA_APP // POCKETMAGE_OS
 enum JournalState {J_MENU, J_TXT};
@@ -43,6 +42,7 @@ void drawJMENU() {
   delay(50);
 
   // Display background
+  display.setTextColor(GxEPD_BLACK);
   EINK().drawStatusBar("Type:YYYYMMDD or (T)oday");
   display.drawBitmap(0, 0, _journal, 320, 218, GxEPD_BLACK);
 
@@ -50,92 +50,51 @@ void drawJMENU() {
   DateTime now = CLOCK().nowDT();
   String year = String(now.year());
 
-  // Files are in the format "/journal/YYYYMMDD.txt"
-  // JANUARY
-  for (int i = 1; i < 31; i++) {
-    String dayCode = "";
-    if (i<10) dayCode = "0"+String(i);
-    else dayCode = String(i);
-    
-    String fileCode = "/journal/" + year + "01" + dayCode + ".txt";
-    if (global_fs->exists(fileCode)) display.fillRect(91 + (7*(i-1)), 50, 4, 4, GxEPD_BLACK);
-  }
-  // FEBRUARY
-  int febDays = isLeapYear(year.toInt()) ? 29 : 28;
-  for (int i = 1; i <= febDays; i++) {
-    String dayCode = (i < 10) ? "0" + String(i) : String(i);
-    String fileCode = "/journal/" + year + "02" + dayCode + ".txt";
-    if (global_fs->exists(fileCode)) display.fillRect(91 + (7 * (i - 1)), 59, 4, 4, GxEPD_BLACK);
+  // 1-indexed matrix to store which days have journal entries
+  bool hasJournal[13][32] = {false}; 
+
+  // Read the directory exactly ONCE to prevent SD Card / VFS thrashing
+  File dir = global_fs->open("/journal");
+  if (dir && dir.isDirectory()) {
+    File entry;
+    while ((entry = dir.openNextFile())) {
+      if (!entry.isDirectory()) {
+        String name = entry.name();
+        
+        // Handle potential leading slash from filesystem driver
+        if (name.startsWith("/")) name = name.substring(1);
+        
+        // Ensure format is exactly YYYYMMDD.txt (12 chars)
+        if (name.length() == 12 && name.endsWith(".txt")) {
+          if (name.substring(0, 4) == year) {
+            int m = name.substring(4, 6).toInt();
+            int d = name.substring(6, 8).toInt();
+            // Bound checking before writing to array
+            if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+              hasJournal[m][d] = true;
+            }
+          }
+        }
+      }
+      entry.close();
+    }
+    dir.close();
   }
 
-  // MARCH
-  for (int i = 1; i <= 31; i++) {
-    String dayCode = (i < 10) ? "0" + String(i) : String(i);
-    String fileCode = "/journal/" + year + "03" + dayCode + ".txt";
-    if (global_fs->exists(fileCode)) display.fillRect(91 + (7 * (i - 1)), 68, 4, 4, GxEPD_BLACK);
-  }
+  // Pre-calculated Y offsets for each month row
+  int yOffsets[12] = {50, 59, 68, 77, 86, 95, 104, 113, 122, 131, 140, 149};
+  int daysInMonths[12] = {
+    31, isLeapYear(now.year()) ? 29 : 28, 31, 30, 31, 30, 
+    31, 31, 30, 31, 30, 31
+  };
 
-  // APRIL
-  for (int i = 1; i <= 30; i++) {
-    String dayCode = (i < 10) ? "0" + String(i) : String(i);
-    String fileCode = "/journal/" + year + "04" + dayCode + ".txt";
-    if (global_fs->exists(fileCode)) display.fillRect(91 + (7 * (i - 1)), 77, 4, 4, GxEPD_BLACK);
-  }
-
-  // MAY
-  for (int i = 1; i <= 31; i++) {
-    String dayCode = (i < 10) ? "0" + String(i) : String(i);
-    String fileCode = "/journal/" + year + "05" + dayCode + ".txt";
-    if (global_fs->exists(fileCode)) display.fillRect(91 + (7 * (i - 1)), 86, 4, 4, GxEPD_BLACK);
-  }
-
-  // JUNE
-  for (int i = 1; i <= 30; i++) {
-    String dayCode = (i < 10) ? "0" + String(i) : String(i);
-    String fileCode = "/journal/" + year + "06" + dayCode + ".txt";
-    if (global_fs->exists(fileCode)) display.fillRect(91 + (7 * (i - 1)), 95, 4, 4, GxEPD_BLACK);
-  }
-
-  // JULY
-  for (int i = 1; i <= 31; i++) {
-    String dayCode = (i < 10) ? "0" + String(i) : String(i);
-    String fileCode = "/journal/" + year + "07" + dayCode + ".txt";
-    if (global_fs->exists(fileCode)) display.fillRect(91 + (7 * (i - 1)), 104, 4, 4, GxEPD_BLACK);
-  }
-
-  // AUGUST
-  for (int i = 1; i <= 31; i++) {
-    String dayCode = (i < 10) ? "0" + String(i) : String(i);
-    String fileCode = "/journal/" + year + "08" + dayCode + ".txt";
-    if (global_fs->exists(fileCode)) display.fillRect(91 + (7 * (i - 1)), 113, 4, 4, GxEPD_BLACK);
-  }
-
-  // SEPTEMBER
-  for (int i = 1; i <= 30; i++) {
-    String dayCode = (i < 10) ? "0" + String(i) : String(i);
-    String fileCode = "/journal/" + year + "09" + dayCode + ".txt";
-    if (global_fs->exists(fileCode)) display.fillRect(91 + (7 * (i - 1)), 122, 4, 4, GxEPD_BLACK);
-  }
-
-  // OCTOBER
-  for (int i = 1; i <= 31; i++) {
-    String dayCode = (i < 10) ? "0" + String(i) : String(i);
-    String fileCode = "/journal/" + year + "10" + dayCode + ".txt";
-    if (global_fs->exists(fileCode)) display.fillRect(91 + (7 * (i - 1)), 131, 4, 4, GxEPD_BLACK);
-  }
-
-  // NOVEMBER
-  for (int i = 1; i <= 30; i++) {
-    String dayCode = (i < 10) ? "0" + String(i) : String(i);
-    String fileCode = "/journal/" + year + "11" + dayCode + ".txt";
-    if (global_fs->exists(fileCode)) display.fillRect(91 + (7 * (i - 1)), 140, 4, 4, GxEPD_BLACK);
-  }
-
-  // DECEMBER
-  for (int i = 1; i <= 31; i++) {
-    String dayCode = (i < 10) ? "0" + String(i) : String(i);
-    String fileCode = "/journal/" + year + "12" + dayCode + ".txt";
-    if (global_fs->exists(fileCode)) display.fillRect(91 + (7 * (i - 1)), 149, 4, 4, GxEPD_BLACK);
+  // Plot the graph from the matrix
+  for (int m = 1; m <= 12; m++) {
+    for (int d = 1; d <= daysInMonths[m - 1]; d++) {
+      if (hasJournal[m][d]) {
+        display.fillRect(91 + (7 * (d - 1)), yOffsets[m - 1], 4, 4, GxEPD_BLACK);
+      }
+    }
   }
 
   if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
@@ -170,11 +129,11 @@ void JMENUCommand(String command) {
 
     currentJournal = fileName;
 
-    if (SAVE_POWER) setCpuFrequencyMhz(POWER_SAVE_FREQ);
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     SDActive = false;
+    
     // Load file
     TXT_INIT_JournalMode();
-    
     return;
   }
 
@@ -189,11 +148,11 @@ void JMENUCommand(String command) {
 
     currentJournal = fileName;
 
-    if (SAVE_POWER) setCpuFrequencyMhz(POWER_SAVE_FREQ);
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     SDActive = false;
+    
     // Load file
     TXT_INIT_JournalMode();
-    
     return;
   }
 
@@ -231,11 +190,11 @@ void JMENUCommand(String command) {
 
       currentJournal = fileName;
 
-      if (SAVE_POWER) setCpuFrequencyMhz(POWER_SAVE_FREQ);
+      if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
       SDActive = false;
+      
       // Load file
       TXT_INIT_JournalMode();
-      
       return;
     }
   }
@@ -263,7 +222,7 @@ void processKB_JOURNAL() {
           JMENUCommand(currentLine);
           currentLine = "";
           cursor_pos = 0;
-        }                                      
+        }                                       
         // SHIFT Recieved
         else if (inchar == 17) {
           if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) {
@@ -392,7 +351,7 @@ void einkHandler_JOURNAL() {
       if (newState) {
         newState = false;
 
-        display.fillScreen(GxEPD_WHITE);
+        EINK().resetDisplay(); // Clear the uninitialized buffer correctly
         drawJMENU();
 
         EINK().multiPassRefresh(2);
