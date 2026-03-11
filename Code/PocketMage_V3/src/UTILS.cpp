@@ -533,6 +533,73 @@ String textPrompt(String promptText, String prefix) {
   return currentLine;
 }
 
+int boolPrompt(String promptText) {
+  KB().setKeyboardState(NORMAL);
+  OLED().oledWord(promptText + " (y/n)");
+
+  for (;;) {
+    // Run background tasks
+    #if !OTA_APP // POCKETMAGE_OS
+      if (!noTimeout)  checkTimeout();
+      if (DEBUG_VERBOSE) printDebug();
+    #endif
+    updateBattState();
+
+    int currentMillis = millis();
+
+    if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
+      char inchar = KB().updateKeypress();
+
+      // HANDLE INPUTS
+      // No char recieved
+      if (inchar == 0) ;
+      else if (inchar == 'y' || inchar == 'Y') {
+        return 1;
+      }
+      else if (inchar == 'n' || inchar == 'N') {
+        return 0;
+      }
+      else {
+        return -1;
+      }
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(10));
+    yield();
+  }
+}
+
+void waitForKeypress(String message) {
+  KB().setKeyboardState(NORMAL); 
+  
+  OLED().oledWord(message, false, false, "Press any key to continue...");
+
+  for (;;) {
+    // Run background tasks
+    #if !OTA_APP // POCKETMAGE_OS
+      if (!noTimeout)  checkTimeout();
+      if (DEBUG_VERBOSE) printDebug();
+    #endif
+    updateBattState();
+
+    int currentMillis = millis();
+
+    if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
+      char inchar = KB().updateKeypress();
+
+      // If any key is pressed, break the loop and return
+      if (inchar != 0) {
+        KBBounceMillis = currentMillis; // Reset debounce timer
+        return; 
+      }
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(10));
+    yield();
+  }
+}
+
+
 // OTA_APP: Remove definition of saveEditingFile
 #if !OTA_APP
 void saveEditingFile() {

@@ -23,7 +23,7 @@ public:
 
   
   // Main methods
-  void oledWord(String word, bool allowLarge = false, bool showInfo = true);
+  void oledWord(String word, bool allowLarge = false, bool showInfo = true, String bottomText = "");
   void oledLine(String line, int input_pos, bool doProgressBar = true, String bottomMsg = "");
   void oledScroll();
   void infoBar();

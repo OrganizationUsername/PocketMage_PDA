@@ -9,12 +9,15 @@
 #include <globals.h>
 #if !OTA_APP // POCKETMAGE_OS
 
-enum FileWizState { WIZ0_, WIZ1_, WIZ1_YN, WIZ2_R, WIZ2_C, WIZ3_ };
+enum FileWizState { WIZ0_, WIZ1_ };
 FileWizState CurrentFileWizState = WIZ0_;
 
 String currentWord = "";
 static String currentLine = "";
 bool refreshFiles = false;
+
+// FIX 2: Max files to load in memory to prevent OOM Panics
+#define MAX_CACHED_FILES 200 
 
 std::vector<String> excludedPaths = {
   "/sys",
@@ -30,7 +33,6 @@ void FILEWIZ_INIT() {
   EINK().forceSlowFullUpdate(true);
   newState = true;
 }
-
 
 // OLED file display
 struct FileObject {
@@ -63,7 +65,7 @@ struct FileObject {
     }
 
     // Determine type
-    if (extension.equalsIgnoreCase(".txt")) {
+    if (extension.equalsIgnoreCase(".txt") || extension.equalsIgnoreCase(".md") || extension.equalsIgnoreCase(".c")) {
       type = 'T';
     } else if (extension.equalsIgnoreCase(".tar")) {
       type = 'A';
@@ -78,6 +80,12 @@ String renderWizMini(String folder, int8_t scrollDelta) {
   static String prevFolder = "";
   static std::vector<FileObject> cachedFiles;
 
+  // Force reload directory if file changed/deleted
+  if (refreshFiles) {
+    prevFolder = ""; // Force the if-statement below to trigger
+    refreshFiles = false;
+  }
+
   // Reload directory if folder changed
   if (folder != prevFolder) {
     SDActive = true;
@@ -90,11 +98,16 @@ String renderWizMini(String folder, int8_t scrollDelta) {
     File dir = global_fs->open(folder);
     if (dir && dir.isDirectory()) {
       File entry;
-      while ((entry = dir.openNextFile())) {
-        // Normalize full path
+      // FIX 2: Apply the hardcap limit to protect Heap RAM
+      while ((entry = dir.openNextFile()) && cachedFiles.size() < MAX_CACHED_FILES) {
+        
+        // FIX 3: Safely construct path without double-slashes
         String fullPath = folder;
         if (!fullPath.endsWith("/")) fullPath += "/";
-        fullPath += entry.name();
+        
+        String entryName = entry.name();
+        if (entryName.startsWith("/")) entryName = entryName.substring(1);
+        fullPath += entryName;
 
         // Skip folder itself if in excludedPaths
         bool skip = false;
@@ -131,20 +144,6 @@ String renderWizMini(String folder, int8_t scrollDelta) {
     SDActive = false;
   }
 
-  #pragma message "TODO: Need to refresh directory here."
-  // Reload directory if file changed
-  /*if (refreshFiles) {
-    SDActive = true;
-    pocketmage::setCpuSpeed(240);
-    delay(50);
-
-    // reload here
-
-    if (SAVE_POWER)
-    pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
-    SDActive = false;
-  }*/
-
   // Empty folder
   if (cachedFiles.empty()) {
     String msg = folder + " is empty!";
@@ -172,7 +171,6 @@ String renderWizMini(String folder, int8_t scrollDelta) {
         default:  u8g2.drawXBMP(1, 1, 30, 30, _LFileIcons[3]); break;
       }
       String dispName = f.name + f.extension;
-      //u8g2.setFont(u8g2_font_helvB14_tf);
       u8g2.setFont(u8g2_font_7x13B_tf);
       u8g2.drawStr(34,29,dispName.c_str());
     }
@@ -222,9 +220,6 @@ String fileWizardMini(bool allowRecentSelect, String rootDir, char inchar_) {
   static String selectedPath = "";
   static String selectedDirectory = "";
 
-  // Normalize rootDir so it always has trailing slash
-  //if (!rootDir.endsWith("/")) rootDir += "/";
-
   // Initialize or clamp selectedDirectory to rootDir
   if (selectedDirectory == "" || selectedDirectory.length() < rootDir.length() || 
       !selectedDirectory.startsWith(rootDir)) {
@@ -268,10 +263,6 @@ String fileWizardMini(bool allowRecentSelect, String rootDir, char inchar_) {
     else if (inchar == 21) {
       scrollDelta = 1;
     } 
-    // 'n' recieved (new folder)
-    else if (inchar == 'n' || inchar == 'N' || inchar == '/') {
-      #pragma message "TODO: populate"
-    }
     // Exit received
     else if (inchar == 12) {
       return "_EXIT_";
@@ -292,17 +283,23 @@ String fileWizardMini(bool allowRecentSelect, String rootDir, char inchar_) {
     else if (inchar == 20 || inchar == 29 || inchar == 7 || inchar == 13) {
       if (selectedPath != "") {
         File entry = global_fs->open(selectedPath);
-        // If selectedPath is a folder, open it and change the selectedDirectory
-        if (entry && entry.isDirectory()) {
-          selectedDirectory = selectedPath;
-          // Clamp to rootDir if needed
-          if (selectedDirectory.length() < rootDir.length() || 
-              !selectedDirectory.startsWith(rootDir)) {
-            selectedDirectory = rootDir;
+        if (entry) {
+          // FIX 1: Read properties and immediately close to stop VFS leakage
+          bool isDirectory = entry.isDirectory();
+          entry.close();
+
+          if (isDirectory) {
+            selectedDirectory = selectedPath;
+            // Clamp to rootDir if needed
+            if (selectedDirectory.length() < rootDir.length() || 
+                !selectedDirectory.startsWith(rootDir)) {
+              selectedDirectory = rootDir;
+            }
+          }
+          else {
+            return selectedPath;
           }
         }
-        // If selectedPath is a file, return the selectedPath as a String 
-        else return selectedPath;
       }
     }
     else if (allowRecentSelect && (inchar >= '0' && inchar <= '9')) {
@@ -410,7 +407,7 @@ void processKB_FILEWIZ() {
     case WIZ0_:
       disableTimeout = false;
 
-      outPath = fileWizardMini(true);
+      outPath = fileWizardMini(true, "/");
       if (outPath == "_EXIT_") {
         HOME_INIT();
         break;
@@ -419,268 +416,103 @@ void processKB_FILEWIZ() {
         // Open file
         if (outPath != "-" && outPath != "") {
           PM_SDAUTO().setWorkingFile(outPath);
-          // GO TO WIZ1_
           CurrentFileWizState = WIZ1_;
           newState = true;
         }
       }
-
       break;
 
     case WIZ1_:
       disableTimeout = false;
-
       KB().setKeyboardState(FUNC);
       currentMillis = millis();
-      //Make sure oled only updates at 60fps
+      
       if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {  
         char inchar = KB().updateKeypress();
-        //No char recieved
+        
         if (inchar == 0);
-        //BKSP Recieved
+        // BKSP Recieved (Go back to WIZ0)
         else if (inchar == 127 || inchar == 8 || inchar == 12) {
           FILEWIZ_INIT();
           break;
         }
         else if (inchar >= '1' && inchar <= '4') {
-          int fileIndex = (inchar == '0') ? 10 : (inchar - '0');
-          // SELECT OPTION
-          switch (fileIndex) {
-            case 1: // RENAME
-              CurrentFileWizState = WIZ2_R;
-              newState = true;
-              break;
-            case 2: //DELETE
-              CurrentFileWizState = WIZ1_YN;
-              newState = true;
-              break;
-            case 3: // COPY
-              CurrentFileWizState = WIZ2_C;
-              newState = true;
-              break;
-            case 4: // ELABORATE
-              break;
-          }
-        }
-
-        currentMillis = millis();
-        //Make sure oled only updates at 60fps
-        if (currentMillis - OLEDFPSMillis >= (1000/OLED_MAX_FPS)) {
-          OLEDFPSMillis = currentMillis;
-          OLED().oledLine(currentWord, currentWord.length(), false);
-        }
-        KBBounceMillis = currentMillis;
-      }
-      break;
-    case WIZ1_YN:
-      disableTimeout = false;
-
-      KB().setKeyboardState(NORMAL);
-      currentMillis = millis();
-      //Make sure oled only updates at 60fps
-      if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {  
-        char inchar = KB().updateKeypress();
-        //No char recieved
-        if (inchar == 0);
-        //BKSP Recieved
-        else if (inchar == 127 || inchar == 8 || inchar == 12) {
-          CurrentFileWizState = WIZ1_;
-          newState = true;
-          break;
-        }
-        // Y RECIEVED
-        else if (inchar == 'y' || inchar == 'Y') {
-          // DELETE FILE
-          PM_SDAUTO().delFile(PM_SDAUTO().getWorkingFile());
           
-          // RETURN TO FILE WIZ HOME
-          refreshFiles = true;
-          CurrentFileWizState = WIZ0_;
-          newState = true;
-          break;
-        }
-        // N RECIEVED
-        else if (inchar == 'n' || inchar == 'N') {
-          // GO BACK
-          CurrentFileWizState = WIZ1_;
-          newState = true;
-          break;
+          // Get the current file path and isolate its directory & extension
+          String oldPath = PM_SDAUTO().getWorkingFile();
+          int lastSlash = oldPath.lastIndexOf('/');
+          int lastDot = oldPath.lastIndexOf('.');
+          
+          String dirPath = (lastSlash != -1) ? oldPath.substring(0, lastSlash + 1) : "/";
+          String extension = (lastDot != -1 && lastDot > lastSlash) ? oldPath.substring(lastDot) : "";
+
+          // --- 1. RENAME FILE ---
+          if (inchar == '1') { 
+            KB().setKeyboardState(NORMAL);
+            String input = textPrompt("Enter new filename:");
+            if (input != "_EXIT_" && input != "") {
+              OLED().oledWord("Renaming...");
+              
+              String newName = dirPath + input + extension; 
+              PM_SDAUTO().renFile(oldPath, newName);
+              
+              refreshFiles = true;
+              CurrentFileWizState = WIZ0_;
+              newState = true;
+            }
+          }
+          // --- 2. DELETE FILE ---
+          else if (inchar == '2') { 
+            int response = boolPrompt("Delete File?");
+            if (response == 1) {
+              OLED().oledWord("Deleting...");
+              PM_SDAUTO().delFile(oldPath);
+              
+              refreshFiles = true;
+              CurrentFileWizState = WIZ0_;
+              newState = true;
+            }
+          }
+          // --- 3. COPY FILE ---
+          else if (inchar == '3') { 
+            KB().setKeyboardState(NORMAL);
+            String input = textPrompt("Enter copy name:");
+            if (input != "_EXIT_" && input != "") {
+              OLED().oledWord("Copying...");
+              
+              String newName = dirPath + input + extension;
+              PM_SDAUTO().copyFile(oldPath, newName);
+              
+              refreshFiles = true;
+              CurrentFileWizState = WIZ0_;
+              newState = true;
+            }
+          }
+          // --- 4. ELABORATE (INFO) ---
+          else if (inchar == '4') { 
+            File f = global_fs->open(oldPath, FILE_READ);
+            if (f) {
+              size_t fSize = f.size();
+              f.close(); // Safety close
+              
+              String info = "Size: " + String(fSize) + " Bytes.";
+              waitForKeypress(info);
+            } else {
+              OLED().oledWord("Error reading file.");
+              delay(1500);
+            }
+            KB().setKeyboardState(FUNC); 
+          }
         }
 
         currentMillis = millis();
-        //Make sure oled only updates at 60fps
         if (currentMillis - OLEDFPSMillis >= (1000/OLED_MAX_FPS)) {
           OLEDFPSMillis = currentMillis;
-          OLED().oledLine(currentWord, currentWord.length(), false);
+          OLED().oledWord("Select an operation");
         }
         KBBounceMillis = currentMillis;
       }
       break;
-    case WIZ2_R:
-      disableTimeout = false;
-
-      //KB().setKeyboardState(NORMAL);
-      currentMillis = millis();
-      //Make sure oled only updates at 60fps
-      if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {  
-        char inchar = KB().updateKeypress();
-        //No char recieved
-        if (inchar == 0);                                         
-        // SHIFT Recieved
-        else if (inchar == 17) {
-          if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) {
-            KB().setKeyboardState(NORMAL);
-          } else if (KB().getKeyboardState() == FUNC) {
-            KB().setKeyboardState(FN_SHIFT);
-          } else {
-            KB().setKeyboardState(SHIFT);
-          }
-        }
-        // FN Recieved
-        else if (inchar == 18) {
-          if (KB().getKeyboardState() == FUNC || KB().getKeyboardState() == FN_SHIFT) {
-            KB().setKeyboardState(NORMAL);
-          } else if (KB().getKeyboardState() == SHIFT) {
-            KB().setKeyboardState(FN_SHIFT);
-          } else {
-            KB().setKeyboardState(FUNC);
-          }
-        }
-        //Space Recieved
-        else if (inchar == 32) {}
-        //ESC / CLEAR Recieved
-        else if (inchar == 20) {                                  
-          currentWord = "";
-        }
-        //BKSP Recieved
-        else if (inchar == 8) {                  
-          if (currentWord.length() > 0) {
-            currentWord.remove(currentWord.length() - 1);
-          }
-        }
-        else if (inchar == 12) {
-          CurrentFileWizState = WIZ1_;
-          KB().setKeyboardState(NORMAL);
-          currentWord = "";
-          currentLine = "";
-          newState = true;
-          break;
-        }
-        //ENTER Recieved
-        else if (inchar == 13) {      
-          // RENAME FILE                    
-          String newName = "/" + currentWord + ".txt";
-          PM_SDAUTO().renFile(PM_SDAUTO().getWorkingFile(), newName);
-
-          // RETURN TO WIZ0
-          refreshFiles = true;
-          CurrentFileWizState = WIZ0_;
-          KB().setKeyboardState(NORMAL);
-          newState = true;
-          currentWord = "";
-          currentLine = "";
-        }
-        //All other chars
-        else {
-          //Only allow char to be added if it's an allowed char
-          if (isalnum(inchar) || inchar == '_' || inchar == '-' || inchar == '.') currentWord += inchar;
-          if (inchar >= 48 && inchar <= 57) {}  //Only leave FN on if typing numbers
-          else if (KB().getKeyboardState() != NORMAL){
-            KB().setKeyboardState(NORMAL);
-          }
-        }
-
-        currentMillis = millis();
-        //Make sure oled only updates at 60fps
-        if (currentMillis - OLEDFPSMillis >= (1000/OLED_MAX_FPS)) {
-          OLEDFPSMillis = currentMillis;
-          OLED().oledLine(currentWord, currentWord.length(), false);
-        }
-      }
-      break;
-    case WIZ2_C:
-      disableTimeout = false;
-
-      //KB().setKeyboardState(NORMAL);
-      currentMillis = millis();
-      //Make sure oled only updates at 60fps
-      if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {  
-        char inchar = KB().updateKeypress();
-        //No char recieved
-        if (inchar == 0);                                         
-        // SHIFT Recieved
-        else if (inchar == 17) {
-          if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) {
-            KB().setKeyboardState(NORMAL);
-          } else if (KB().getKeyboardState() == FUNC) {
-            KB().setKeyboardState(FN_SHIFT);
-          } else {
-            KB().setKeyboardState(SHIFT);
-          }
-        }
-        // FN Recieved
-        else if (inchar == 18) {
-          if (KB().getKeyboardState() == FUNC || KB().getKeyboardState() == FN_SHIFT) {
-            KB().setKeyboardState(NORMAL);
-          } else if (KB().getKeyboardState() == SHIFT) {
-            KB().setKeyboardState(FN_SHIFT);
-          } else {
-            KB().setKeyboardState(FUNC);
-          }
-        }
-        //Space Recieved
-        else if (inchar == 32) {}
-        //ESC / CLEAR Recieved
-        else if (inchar == 20) {                                  
-          currentWord = "";
-        }
-        //BKSP Recieved
-        else if (inchar == 8) {                  
-          if (currentWord.length() > 0) {
-            currentWord.remove(currentWord.length() - 1);
-          }
-        }
-        else if (inchar == 12) {
-          CurrentFileWizState = WIZ1_;
-          KB().setKeyboardState(NORMAL);
-          currentWord = "";
-          currentLine = "";
-          newState = true;
-          break;
-        }
-        //ENTER Recieved
-        else if (inchar == 13) {      
-          // Copy FILE                    
-          String newName = "/" + currentWord + ".txt";
-          PM_SDAUTO().copyFile(PM_SDAUTO().getWorkingFile(), newName);
-
-          // RETURN TO WIZ0
-          refreshFiles = true;
-          CurrentFileWizState = WIZ0_;
-          KB().setKeyboardState(NORMAL);
-          newState = true;
-          currentWord = "";
-          currentLine = "";
-        }
-        //All other chars
-        else {
-          //Only allow char to be added if it's an allowed char
-          if (isalnum(inchar) || inchar == '_' || inchar == '-' || inchar == '.') currentWord += inchar;
-          if (inchar >= 48 && inchar <= 57) {}  //Only leave FN on if typing numbers
-          else if (KB().getKeyboardState() != NORMAL){
-            KB().setKeyboardState(NORMAL);
-          }
-        }
-
-        currentMillis = millis();
-        //Make sure oled only updates at 60fps
-        if (currentMillis - OLEDFPSMillis >= (1000/OLED_MAX_FPS)) {
-          OLEDFPSMillis = currentMillis;
-          OLED().oledLine(currentWord, currentWord.length(), false);
-        }
-      }
-      break;
-  
   }
 }
 
@@ -725,46 +557,10 @@ void einkHandler_FILEWIZ() {
         EINK().drawStatusBar("- " + PM_SDAUTO().getWorkingFile());
         display.drawBitmap(0, 0, fileWizardallArray[1], 320, 218, GxEPD_BLACK);
 
-        //EINK().refresh();
         EINK().multiPassRefresh(2);
-      }
-      break;
-    case WIZ1_YN:
-      if (newState) {
-        newState = false;
-        EINK().resetDisplay();
-
-        // DRAW APP
-        EINK().drawStatusBar("DEL:" + PM_SDAUTO().getWorkingFile() + "?(Y/N)");
-        display.drawBitmap(0, 0, fileWizardallArray[1], 320, 218, GxEPD_BLACK);
-
-        EINK().refresh();
-      }
-      break;
-    case WIZ2_R:
-      if (newState) {
-        newState = false;
-        EINK().resetDisplay();
-
-        // DRAW APP
-        EINK().drawStatusBar("Enter New Filename:");
-        display.drawBitmap(0, 0, fileWizardallArray[2], 320, 218, GxEPD_BLACK);
-
-        EINK().refresh();
-      }
-      break;
-    case WIZ2_C:
-      if (newState) {
-        newState = false;
-        EINK().resetDisplay();
-
-        // DRAW APP
-        EINK().drawStatusBar("Enter Name For Copy:");
-        display.drawBitmap(0, 0, fileWizardallArray[2], 320, 218, GxEPD_BLACK);
-
-        EINK().refresh();
       }
       break;
   }
 }
+
 #endif

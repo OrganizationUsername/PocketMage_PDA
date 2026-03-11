@@ -30,10 +30,14 @@ void setupOled() {
 PocketmageOled& OLED() { return pm_oled; }
 
 // ===================== public functions =====================
-void PocketmageOled::oledWord(String word, bool allowLarge, bool showInfo) {
+void PocketmageOled::oledWord(String word, bool allowLarge, bool showInfo, String bottomText) {
   u8g2_.clearBuffer();
 
-  if (showInfo) infoBar();
+  if (showInfo && bottomText == "") infoBar();
+  else if (bottomText != "") {
+    u8g2_.setFont(u8g2_font_5x7_tf);
+    u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(bottomText.c_str())) / 2, u8g2.getDisplayHeight(), bottomText.c_str());
+  }
 
   if (allowLarge) {
     /*u8g2_.setFont(u8g2_font_ncenB24_tr);

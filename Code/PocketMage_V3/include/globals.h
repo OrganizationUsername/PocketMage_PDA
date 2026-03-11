@@ -60,6 +60,8 @@ void checkTimeout();
 void loadState(bool changeState = true);
 void updateBattState();
 String textPrompt(String promptText = "", String prefix = "");
+int boolPrompt(String promptText = "Are you sure?");
+void waitForKeypress(String message = "Press any button to continue...");
 #if !OTA_APP
 void saveEditingFile(); // OTA_APP: Remove saveEditingFile
 #endif
