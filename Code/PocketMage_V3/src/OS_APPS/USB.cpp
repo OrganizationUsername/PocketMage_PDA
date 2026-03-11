@@ -1,3 +1,10 @@
+//  oooooooooooo       .o.        .oooooo..o oooo    oooo  .oooooo..o //
+//  8'   888   `8      .888.      d8P'    `Y8 `888   .8P'  d8P'    `Y8 //
+//       888          .8"888.     Y88bo.       888  d8'    Y88bo.      //
+//       888         .8' `888.     `"Y8888o.   88888[       `"Y8888o.  //
+//       888        .88ooo8888.         `"Y88b  888`88b.         `"Y88b //
+//       888       .8'     `888.  oo     .d8P  888  `88b.  oo     .d8P //
+//      o888o     o88o      o8888o 8""88888P'  o888o  o888o 8""88888P'  //  
 
 #include <globals.h>
 
@@ -12,16 +19,20 @@ static constexpr const char* TAG = "USB";
 static USBMSC msc;
 static sdmmc_card_t* card = nullptr;     // SD card pointer
 
+// FIX 3: Prevent race conditions between user input and background USB interrupts
+static volatile bool usb_is_shutting_down = false;
+
 void USBAppShutdown() {
   if (!mscEnabled) return;
-
+  
+  usb_is_shutting_down = true;
   ESP_LOGI(TAG, "Shutting down USB MSC...");
 
-  // Notify host media removal
+  // FIX 1: Notify host media removal and give it time to flush caches safely
   msc.mediaPresent(false);
-  delay(100);
+  delay(500); 
 
-  // Stop MSC functionality
+  // Stop MSC functionality and detach from USB host
   msc.end();
 
   // Free card struct
@@ -35,33 +46,10 @@ void USBAppShutdown() {
 
   mscEnabled = false;
 
-  ESP_LOGI(TAG, "Re-mounting SD_MMC...");
+  // FIX 4: Removed the redundant SD_MMC.begin() logic here. 
+  // The system is about to esp_restart(), so remounting the SD card 
+  // right before a hardware reboot is dangerous and unnecessary.
 
-  SD_MMC.end();  // Properly stop previous SD_MMC usage
-
-  SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0); // Check your pins here
-
-  if (!SD_MMC.begin("/sdcard", true) || SD_MMC.cardType() == CARD_NONE) {
-    ESP_LOGE(TAG, "SD Mount Failed :(");
-    OLED().oledWord("SD Card Not Detected!");
-    delay(2000);
-
-    if (ALLOW_NO_MICROSD) {
-      OLED().oledWord("All Work Will Be Lost!");
-      delay(5000);
-      PM_SDAUTO().setNoSD(true);
-    } else {
-      OLED().oledWord("Insert SD Card and Reboot!");
-      delay(5000);
-      u8g2.setPowerSave(1);
-      BZ().playJingle(Jingles::Shutdown);
-      esp_deep_sleep_start();
-      return;
-    }
-  }
-
-  if (!SD_MMC.exists("/sys"))     SD_MMC.mkdir("/sys");
-  if (!SD_MMC.exists("/journal")) SD_MMC.mkdir("/journal");
   if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
   disableTimeout = false;
 
@@ -70,24 +58,42 @@ void USBAppShutdown() {
 }
 
 static int32_t onWrite(uint32_t lba, uint32_t offset, uint8_t* buffer, uint32_t bufsize) {
+  if (usb_is_shutting_down) return -1; // Safety Lock
+  
   SDActive = true;
-  if (!card || card->csd.sector_size == 0) return -1;
+  if (!card || card->csd.sector_size == 0) {
+    SDActive = false;
+    return -1;
+  }
+  
   uint32_t secSize = card->csd.sector_size;
   for (uint32_t i = 0; i < bufsize / secSize; ++i) {
     esp_err_t err = sdmmc_write_sectors(card, buffer + i * secSize, lba + i, 1);
-    if (err != ESP_OK) return -1;
+    if (err != ESP_OK) {
+      SDActive = false;
+      return -1;
+    }
   }
   SDActive = false;
   return bufsize;
 }
 
 static int32_t onRead(uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize) {
+  if (usb_is_shutting_down) return -1; // Safety Lock
+  
   SDActive = true;
-  if (!card || card->csd.sector_size == 0) return -1;
+  if (!card || card->csd.sector_size == 0) {
+    SDActive = false;
+    return -1;
+  }
+  
   uint32_t secSize = card->csd.sector_size;
   for (uint32_t i = 0; i < bufsize / secSize; ++i) {
     esp_err_t err = sdmmc_read_sectors(card, (uint8_t*)buffer + i * secSize, lba + i, 1);
-    if (err != ESP_OK) return -1;
+    if (err != ESP_OK) {
+      SDActive = false;
+      return -1;
+    }
   }
   SDActive = false;
   return bufsize;
@@ -104,7 +110,6 @@ static bool onStartStop(uint8_t power_condition, bool start, bool eject) {
 static void usbEventCallback(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
   SDActive = true;
   if (event_base == ARDUINO_USB_EVENTS) {
-    arduino_usb_event_data_t* data = (arduino_usb_event_data_t*)event_data;
     switch (event_id) {
       case ARDUINO_USB_STARTED_EVENT: ESP_LOGI(TAG, "USB Connected"); break;
       case ARDUINO_USB_STOPPED_EVENT: ESP_LOGI(TAG, "USB Disconnected"); break;
@@ -116,6 +121,8 @@ static void usbEventCallback(void* arg, esp_event_base_t event_base, int32_t eve
 }
 
 void USB_INIT() {
+  usb_is_shutting_down = false;
+  
   // Switch USB contol to ESP
   PowerSystem.setUSBControlESP();
 
@@ -153,6 +160,7 @@ void USB_INIT() {
   err = sdmmc_host_init_slot(SDMMC_HOST_SLOT_1, &slot_config);
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "Slot init failed: %s\n", esp_err_to_name(err));
+    sdmmc_host_deinit(); // FIX 2: Hardware release on fail
     return;
   }
 
@@ -160,6 +168,7 @@ void USB_INIT() {
   card = (sdmmc_card_t*)malloc(sizeof(sdmmc_card_t));
   if (!card) {
     ESP_LOGE(TAG, "Failed to allocate card struct\n", esp_err_to_name(err));
+    sdmmc_host_deinit(); // FIX 2: Hardware release on fail
     return;
   }
 
@@ -168,6 +177,7 @@ void USB_INIT() {
     ESP_LOGE(TAG, "Card init failed: %s\n", esp_err_to_name(err));
     free(card);
     card = nullptr;
+    sdmmc_host_deinit(); // FIX 2: Hardware release on fail
     return;
   }
 
@@ -186,7 +196,6 @@ void USB_INIT() {
   USB.onEvent(usbEventCallback);
   USB.begin();
 
-  //ESP_LOGI("USB MSC started. Capacity: %d bytes\n", card->csd.capacity * card->csd.sector_size);
   mscEnabled = true;
   delay(50);
 
@@ -210,7 +219,7 @@ void processKB_USB() {
     //No char recieved
     if (inchar == 0);   
     // Home recieved
-    else if (inchar == 12 || inchar == 8 || inchar == 19 || inchar == 28|| inchar == 12) {
+    else if (inchar == 12 || inchar == 8 || inchar == 19 || inchar == 28) {
       USBAppShutdown();
       prefs.begin("PocketMage", false);
       prefs.putInt("CurrentAppState", static_cast<int>(HOME));
