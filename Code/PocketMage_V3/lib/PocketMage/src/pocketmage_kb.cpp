@@ -209,8 +209,14 @@ static inline bool hid_keyboard_get_char(uint8_t modifier, uint8_t key_code,
   if ((key_code >= HID_KEY_A) && (key_code <= HID_KEY_SLASH)) {
     *key_char = keycode2ascii[key_code][mod];
   } else {
-    // All other key pressed
-    return false;
+    // Check for arrow keys and map to PocketMage controls
+    switch (key_code) {
+      case HID_KEY_LEFT:  *key_char = 19; break; // <-
+      case HID_KEY_RIGHT: *key_char = 21; break; // ->
+      case HID_KEY_DOWN:  *key_char = 20; break; // SEL
+      case HID_KEY_UP:    *key_char = 20; break; // SEL
+      default: return false; // All other keys pressed
+    }
   }
 
   return true;
@@ -581,6 +587,78 @@ void init_USBHID(void) {
   assert(task_created == pdTRUE);
 }
 
+void close_USBHID(void) {
+  ESP_LOGI(TAG, "Closing USB HID...");
+
+  // Signal shutdown
+  user_shutdown = true;
+
+  // Give tasks a moment to process shutdown
+  vTaskDelay(pdMS_TO_TICKS(100));
+
+  // --- Step 1: Request HID Host to stop ---
+  esp_err_t err = hid_host_uninstall();
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to uninstall HID host: %s", esp_err_to_name(err));
+  } else {
+    ESP_LOGI(TAG, "HID host uninstalled");
+  }
+
+  // --- Step 2: Notify USB library to finish events ---
+  usb_host_lib_handle_events(0, 0);  // Force event loop one more time
+
+  // --- Step 3: Wait for all clients to detach ---
+  bool all_clients_gone = false;
+  for (int i = 0; i < 50; i++) {  // wait up to ~5s
+    uint32_t event_flags;
+    if (usb_host_lib_handle_events(1, &event_flags) == ESP_OK) {
+      if (event_flags & USB_HOST_LIB_EVENT_FLAGS_NO_CLIENTS) {
+        all_clients_gone = true;
+        break;
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+
+  if (!all_clients_gone) {
+    ESP_LOGW(TAG, "USB clients did not detach in time");
+  } else {
+    ESP_LOGI(TAG, "All USB clients detached");
+  }
+
+  // --- Step 4: Uninstall USB host ---
+  err = usb_host_uninstall();
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to uninstall USB host: %s", esp_err_to_name(err));
+  } else {
+    ESP_LOGI(TAG, "USB host uninstalled");
+  }
+
+  // --- Step 5: Cleanup event queue ---
+  if (hid_host_event_queue) {
+    xQueueReset(hid_host_event_queue);
+    vQueueDelete(hid_host_event_queue);
+    hid_host_event_queue = NULL;
+    ESP_LOGI(TAG, "HID host event queue deleted");
+  }
+
+  // --- Step 6: Delete leftover tasks (if still alive) ---
+  if (hid_host_task_handle) {
+    vTaskDelete(hid_host_task_handle);
+    hid_host_task_handle = NULL;
+  }
+  if (usb_lib_task_handle) {
+    vTaskDelete(usb_lib_task_handle);
+    usb_lib_task_handle = NULL;
+  }
+
+  // Reset flag for next re-init
+  user_shutdown = false;
+
+  ESP_LOGI(TAG, "USB HID closed successfully");
+}
+
+
 #pragma region keymaps
 // ===================== Keymaps =====================
 char currentKB[4][10];            // Current keyboard layout (remove)
@@ -694,9 +772,19 @@ char PocketmageKB::updateKeypress() {
 }
 
 void PocketmageKB::checkUSBKB() {
+  // Throttle polling to 500ms to prevent flooding the I2C bus during tight loops
+  static unsigned long lastPollTime = 0;
+  if (millis() - lastPollTime < 500) {
+      return; 
+  }
+  lastPollTime = millis();
+
   // Check if USB Keyboard has been connected
-  bool needBoost;
-  PowerSystem.getOTGNeed(needBoost);
+  bool needBoost = false;
+  if (!PowerSystem.getOTGNeed(needBoost)) {
+      return; 
+  }
+
   if (needBoost) {
     // Enable boost if not already on
     bool boostOn;
@@ -720,7 +808,7 @@ void PocketmageKB::checkUSBKB() {
   }
   else {
 
-    #pragma message "TODO: Should probably add shutdown script here but it does not work..."
+    // #pragma message "TODO: Should probably add shutdown script here but it does not work..."
     // close_USBHID();
 
     // Disable boost if not already off
