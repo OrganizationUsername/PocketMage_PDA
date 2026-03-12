@@ -1,3 +1,5 @@
+// AUDIT 1
+
 #include <globals.h>
 #if !OTA_APP  // POCKETMAGE_OS
 enum LexState { MENU, DEF };

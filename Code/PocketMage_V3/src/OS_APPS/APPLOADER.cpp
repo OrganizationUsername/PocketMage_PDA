@@ -1,3 +1,7 @@
+<<<<<<< Updated upstream
+=======
+// AUDIT 1
+>>>>>>> Stashed changes
 #include <globals.h>
 #include <ESP32-targz.h>
 #include <Update.h>

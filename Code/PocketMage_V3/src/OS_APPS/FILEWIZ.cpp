@@ -5,6 +5,7 @@
 //   888    "     888   888          888    "        `888.8'  `888.8'      888     .888P       //
 //   888          888   888       o  888       o      `888'    `888'       888    d888'    .P  //
 //  o888o        o888o o888ooooood8 o888ooooood8       `8'      `8'       o888o .8888888888P   //
+// AUDIT 1
 
 #include <globals.h>
 #if !OTA_APP // POCKETMAGE_OS
