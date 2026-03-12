@@ -384,6 +384,7 @@ String textPrompt(String promptText, String prefix) {
       if (DEBUG_VERBOSE) printDebug();
     #endif
     updateBattState();
+    KB().checkUSBKB();
 
     int currentMillis = millis();
     String left = "";

@@ -23,7 +23,8 @@ static constexpr const char* TAG = "KB";
 #define APP_QUIT_PIN                GPIO_NUM_0
 #define MAX_USB_KB_CHARS 64
 
-static char usb_kb_chars[MAX_USB_KB_CHARS] = {0};  // unused slots initialized to '\0'
+// VOLATILE added here to prevent cross-core optimization corruption without using heavy Queues
+volatile static char usb_kb_chars[MAX_USB_KB_CHARS] = {0};  // unused slots initialized to '\0'
 
 QueueHandle_t hid_host_event_queue;
 bool user_shutdown = false;
@@ -209,8 +210,14 @@ static inline bool hid_keyboard_get_char(uint8_t modifier, uint8_t key_code,
   if ((key_code >= HID_KEY_A) && (key_code <= HID_KEY_SLASH)) {
     *key_char = keycode2ascii[key_code][mod];
   } else {
-    // All other key pressed
-    return false;
+    // Check for arrow keys and map to PocketMage controls
+    switch (key_code) {
+      case HID_KEY_LEFT:  *key_char = 19; break; // <-
+      case HID_KEY_RIGHT: *key_char = 21; break; // ->
+      case HID_KEY_DOWN:  *key_char = 20; break; // SEL
+      case HID_KEY_UP:    *key_char = 20; break; // SEL
+      default: return false; // All other keys pressed
+    }
   }
 
   return true;
@@ -660,26 +667,26 @@ char currentKB[4][10];            // Current keyboard layout (remove)
 char keysArray[4][10] = {
     { 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p' },
     { 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l',   8 },  // 8:BKSP
-    {   9, 'z', 'x', 'c', 'v', 'b', 'n', 'm', '.',  13 },  // 9:TAB, 13:CR
-    {   0,  17,  18, ' ', ' ', ' ',  19,  20,  21,   0 }   // 17:SHFT, 18:FN, 19:<-, 20:SEL, 21:->
+    {  9, 'z', 'x', 'c', 'v', 'b', 'n', 'm', '.',  13 },  // 9:TAB, 13:CR
+    {  0,  17,  18, ' ', ' ', ' ',  19,  20,  21,   0 }   // 17:SHFT, 18:FN, 19:<-, 20:SEL, 21:->
 };
 char keysArraySHFT[4][10] = {
     { 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P' },
     { 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L',   8 },
-    {  14, 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '\'', 13 },
-    {   0,  17,  18, ' ', ' ', ' ',  28,  29,  30,   0 }
+    { 14, 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '\'', 13 },
+    {  0,  17,  18, ' ', ' ', ' ',  28,  29,  30,   0 }
 };
 char keysArrayFN[4][10] = {
     { '1', '2', '3', '4', '5', '6', '7',  '8',  '9', '0' },
     { '#', '!', '$', ':', ';', '(', ')',  '&', '\"',   8 },
-    {  14, '%', '_', '+', '-', '*', '/',  '?',  ',',  13 },
-    {   0,  17,  18, ' ', ' ', ' ',  12,    7,    6,   0 }
+    { 14, '%', '_', '+', '-', '*', '/',  '?',  ',',  13 },
+    {  0,  17,  18, ' ', ' ', ' ',  12,    7,    6,   0 }
 };
 char keysArrayFN_SHFT[4][10] = {
     { '!', '@', '#', '$', '%', '^', '&',  '*',  '(', ')' },
     { '~', '`', '|', '[', ']', '{', '}',  '<',  '>',   8 },
-    {  14, ';', '=', '+', '-', '*', '\\', '?',  ',',  13 },
-    {   0,  17,  18, ' ', ' ', ' ',  24,   25,   26,   0 }
+    { 14, ';', '=', '+', '-', '*', '\\', '?',  ',',  13 },
+    {  0,  17,  18, ' ', ' ', ' ',  24,   25,   26,   0 }
 };
 #pragma endregion
 
@@ -698,9 +705,8 @@ void setupKB(int KB_irq_pin) {
   if (!keypad.begin(TCA8418_DEFAULT_ADDR, &Wire)) {
     ESP_LOGE(TAG, "Error Initializing the Keyboard");
     OLED().oledWord("Keyboard INIT Failed");
-    delay(500);
-    //while (1);
-    esp_restart();
+    delay(1000);
+    while (1);
   }
   keypad.matrix(4, 10);
   wireKB();
@@ -767,9 +773,19 @@ char PocketmageKB::updateKeypress() {
 }
 
 void PocketmageKB::checkUSBKB() {
+  // Throttle polling to 500ms to prevent flooding the I2C bus during tight loops
+  static unsigned long lastPollTime = 0;
+  if (millis() - lastPollTime < 500) {
+      return; 
+  }
+  lastPollTime = millis();
+
   // Check if USB Keyboard has been connected
-  bool needBoost;
-  PowerSystem.getOTGNeed(needBoost);
+  bool needBoost = false;
+  if (!PowerSystem.getOTGNeed(needBoost)) {
+      return; 
+  }
+
   if (needBoost) {
     // Enable boost if not already on
     bool boostOn;
@@ -793,7 +809,7 @@ void PocketmageKB::checkUSBKB() {
   }
   else {
 
-    #pragma message "TODO: Should probably add shutdown script here but it does not work..."
+    // #pragma message "TODO: Should probably add shutdown script here but it does not work..."
     // close_USBHID();
 
     // Disable boost if not already off

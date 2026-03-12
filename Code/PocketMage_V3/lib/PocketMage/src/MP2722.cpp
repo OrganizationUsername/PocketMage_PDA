@@ -254,6 +254,7 @@ bool MP2722::init(uint8_t sda, uint8_t scl) {
   setUSBControlBMS();
 
   // Set CC mode: 011 = Dual Role Power, try SNK
+  // Set CC mode: 100 = Dual Role Power, try SRC
   // Set CC mode: 010 = Dual Role Power
   if (!setCCMode(0b011)) return false;
 

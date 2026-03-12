@@ -26,7 +26,6 @@
 #include "esp_partition.h"
 #include "esp_system.h"
 #include "esp_task_wdt.h"
-#define WDT_TIMEOUT_SECONDS 5
 
 static constexpr const char* TAG = "SYSTEM";
 
@@ -87,7 +86,7 @@ void deepSleep(bool alternateScreenSaver) {
   // Put OLED to sleep
   u8g2.setPowerSave(1);
 
-  // Stop the einkHandler task
+  // Stop the einkHandler task safely
   if (einkHandlerTaskHandle != NULL) {
     vTaskDelete(einkHandlerTaskHandle);
     einkHandlerTaskHandle = NULL;
@@ -124,16 +123,26 @@ void deepSleep(bool alternateScreenSaver) {
       String path = "/assets/backgrounds/" + binFiles[fileIndex];
       File f = global_fs->open(path);
       if (f) {
-        static uint8_t buf[320 * 240];  // Declare as static to avoid stack overflow :D
-        f.read(buf, sizeof(buf));
-        f.close();
+        // FIX 3: Dynamic Heap Allocation to prevent .bss permanent RAM loss
+        size_t fSize = f.size();
+        uint8_t* buf = (uint8_t*)malloc(fSize);
+        
+        if (buf) {
+          f.read(buf, fSize);
+          f.close();
 
-        // Show file
-        display.drawBitmap(0, 0, buf, 320, 240, GxEPD_BLACK);
-        display.setFont(&FreeMonoBold9pt7b);
-        display.setTextColor(GxEPD_BLACK);
-        display.setCursor(5, display.height() - 5);
-        display.print(binFiles[fileIndex].c_str());
+          // Show file
+          display.drawBitmap(0, 0, buf, 320, 240, GxEPD_BLACK);
+          display.setFont(&FreeMonoBold9pt7b);
+          display.setTextColor(GxEPD_BLACK);
+          display.setCursor(5, display.height() - 5);
+          display.print(binFiles[fileIndex].c_str());
+
+          // Free the memory safely
+          free(buf);
+        } else {
+          f.close();
+        }
       }
     }
     // Use standard screensavers
@@ -167,6 +176,7 @@ void deepSleep(bool alternateScreenSaver) {
   prefs.putString("editingFile", PM_SDAUTO().getEditingFile());
   prefs.putBool("Seamless_Reboot", false);
   prefs.end();
+  
   // Sleep the ESP32
   esp_deep_sleep_start();
 }
@@ -240,7 +250,11 @@ void hardReset(void* parameter) {
       OLED().oledWord("Process broken");
       delay(1000);
       HOME_INIT();
+      heldSince = millis(); // Reset so it doesn't constantly trigger
     }
+    
+    // FIX 1: Feed the RTOS scheduler to prevent Watchdog Timeout panic
+    vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
 }
@@ -259,7 +273,7 @@ void PocketMage_INIT() {
   }
   prefs.end();
 
-  // Serial, I2C, SPIA
+  // Serial, I2C, SPI
   Serial.begin(115200);
   Wire.begin(I2C_SDA, I2C_SCL);
 
@@ -282,6 +296,7 @@ void PocketMage_INIT() {
   // KEYBOARD SETUP
   setupKB(KB_IRQ);
   ESP_LOGD(TAG, "setup keyboard");
+  
   // EINK HANDLER SETUP
   setupEink();
   ESP_LOGD(TAG, "setup eink");
@@ -298,13 +313,15 @@ void PocketMage_INIT() {
   if (!PowerSystem.init(I2C_SDA, I2C_SCL)) {
     ESP_LOGV(TAG, "MP2722 Failed to Init");
   }
+
   // Start hardreset task
+  // FIX 2 & 4: Prevent E-ink task overwrite and increase stack size
   xTaskCreatePinnedToCore(pocketmage::hardReset,    // Function name
                           "hardReset",              // Task name
-                          1024,                     // Stack size
+                          2048,                     // Stack size
                           NULL,                     // Parameters
                           0,                        // Priority
-                          &einkHandlerTaskHandle,   // Task handle
+                          NULL,                     // Task handle
                           1                         // Core ID
   );
 
@@ -317,9 +334,11 @@ void PocketMage_INIT() {
   // CAPACATIVE TOUCH SETUP
   setupTouch();
   ESP_LOGD(TAG, "setup touch");
+  
   // RTC SETUP
   setupClock();
   ESP_LOGD(TAG, "setup clock");
+  
   // Set "random" seed
   randomSeed(analogRead(BAT_SENS));
 
