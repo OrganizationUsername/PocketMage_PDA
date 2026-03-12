@@ -22,7 +22,8 @@ static constexpr const char* TAG = "KB";
 #define APP_QUIT_PIN                GPIO_NUM_0
 #define MAX_USB_KB_CHARS 64
 
-static char usb_kb_chars[MAX_USB_KB_CHARS] = {0};  // unused slots initialized to '\0'
+// VOLATILE added here to prevent cross-core optimization corruption without using heavy Queues
+volatile static char usb_kb_chars[MAX_USB_KB_CHARS] = {0};  // unused slots initialized to '\0'
 
 QueueHandle_t hid_host_event_queue;
 bool user_shutdown = false;
@@ -580,78 +581,6 @@ void init_USBHID(void) {
   assert(task_created == pdTRUE);
 }
 
-void close_USBHID(void) {
-  ESP_LOGI(TAG, "Closing USB HID...");
-
-  // Signal shutdown
-  user_shutdown = true;
-
-  // Give tasks a moment to process shutdown
-  vTaskDelay(pdMS_TO_TICKS(100));
-
-  // --- Step 1: Request HID Host to stop ---
-  esp_err_t err = hid_host_uninstall();
-  if (err != ESP_OK) {
-    ESP_LOGW(TAG, "Failed to uninstall HID host: %s", esp_err_to_name(err));
-  } else {
-    ESP_LOGI(TAG, "HID host uninstalled");
-  }
-
-  // --- Step 2: Notify USB library to finish events ---
-  usb_host_lib_handle_events(0, 0);  // Force event loop one more time
-
-  // --- Step 3: Wait for all clients to detach ---
-  bool all_clients_gone = false;
-  for (int i = 0; i < 50; i++) {  // wait up to ~5s
-    uint32_t event_flags;
-    if (usb_host_lib_handle_events(1, &event_flags) == ESP_OK) {
-      if (event_flags & USB_HOST_LIB_EVENT_FLAGS_NO_CLIENTS) {
-        all_clients_gone = true;
-        break;
-      }
-    }
-    vTaskDelay(pdMS_TO_TICKS(100));
-  }
-
-  if (!all_clients_gone) {
-    ESP_LOGW(TAG, "USB clients did not detach in time");
-  } else {
-    ESP_LOGI(TAG, "All USB clients detached");
-  }
-
-  // --- Step 4: Uninstall USB host ---
-  err = usb_host_uninstall();
-  if (err != ESP_OK) {
-    ESP_LOGW(TAG, "Failed to uninstall USB host: %s", esp_err_to_name(err));
-  } else {
-    ESP_LOGI(TAG, "USB host uninstalled");
-  }
-
-  // --- Step 5: Cleanup event queue ---
-  if (hid_host_event_queue) {
-    xQueueReset(hid_host_event_queue);
-    vQueueDelete(hid_host_event_queue);
-    hid_host_event_queue = NULL;
-    ESP_LOGI(TAG, "HID host event queue deleted");
-  }
-
-  // --- Step 6: Delete leftover tasks (if still alive) ---
-  if (hid_host_task_handle) {
-    vTaskDelete(hid_host_task_handle);
-    hid_host_task_handle = NULL;
-  }
-  if (usb_lib_task_handle) {
-    vTaskDelete(usb_lib_task_handle);
-    usb_lib_task_handle = NULL;
-  }
-
-  // Reset flag for next re-init
-  user_shutdown = false;
-
-  ESP_LOGI(TAG, "USB HID closed successfully");
-}
-
-
 #pragma region keymaps
 // ===================== Keymaps =====================
 char currentKB[4][10];            // Current keyboard layout (remove)
@@ -659,26 +588,26 @@ char currentKB[4][10];            // Current keyboard layout (remove)
 char keysArray[4][10] = {
     { 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p' },
     { 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l',   8 },  // 8:BKSP
-    {   9, 'z', 'x', 'c', 'v', 'b', 'n', 'm', '.',  13 },  // 9:TAB, 13:CR
-    {   0,  17,  18, ' ', ' ', ' ',  19,  20,  21,   0 }   // 17:SHFT, 18:FN, 19:<-, 20:SEL, 21:->
+    {  9, 'z', 'x', 'c', 'v', 'b', 'n', 'm', '.',  13 },  // 9:TAB, 13:CR
+    {  0,  17,  18, ' ', ' ', ' ',  19,  20,  21,   0 }   // 17:SHFT, 18:FN, 19:<-, 20:SEL, 21:->
 };
 char keysArraySHFT[4][10] = {
     { 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P' },
     { 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L',   8 },
-    {  14, 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '\'', 13 },
-    {   0,  17,  18, ' ', ' ', ' ',  28,  29,  30,   0 }
+    { 14, 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '\'', 13 },
+    {  0,  17,  18, ' ', ' ', ' ',  28,  29,  30,   0 }
 };
 char keysArrayFN[4][10] = {
     { '1', '2', '3', '4', '5', '6', '7',  '8',  '9', '0' },
     { '#', '!', '$', ':', ';', '(', ')',  '&', '\"',   8 },
-    {  14, '%', '_', '+', '-', '*', '/',  '?',  ',',  13 },
-    {   0,  17,  18, ' ', ' ', ' ',  12,    7,    6,   0 }
+    { 14, '%', '_', '+', '-', '*', '/',  '?',  ',',  13 },
+    {  0,  17,  18, ' ', ' ', ' ',  12,    7,    6,   0 }
 };
 char keysArrayFN_SHFT[4][10] = {
     { '!', '@', '#', '$', '%', '^', '&',  '*',  '(', ')' },
     { '~', '`', '|', '[', ']', '{', '}',  '<',  '>',   8 },
-    {  14, ';', '=', '+', '-', '*', '\\', '?',  ',',  13 },
-    {   0,  17,  18, ' ', ' ', ' ',  24,   25,   26,   0 }
+    { 14, ';', '=', '+', '-', '*', '\\', '?',  ',',  13 },
+    {  0,  17,  18, ' ', ' ', ' ',  24,   25,   26,   0 }
 };
 #pragma endregion
 
@@ -697,9 +626,8 @@ void setupKB(int KB_irq_pin) {
   if (!keypad.begin(TCA8418_DEFAULT_ADDR, &Wire)) {
     ESP_LOGE(TAG, "Error Initializing the Keyboard");
     OLED().oledWord("Keyboard INIT Failed");
-    delay(500);
-    //while (1);
-    esp_restart();
+    delay(1000);
+    while (1);
   }
   keypad.matrix(4, 10);
   wireKB();
