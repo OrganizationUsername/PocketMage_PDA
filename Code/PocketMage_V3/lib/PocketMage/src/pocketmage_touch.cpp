@@ -6,9 +6,6 @@ Adafruit_MPR121 cap =  Adafruit_MPR121(); // Touch slider
 // Initialization of capacative touch class
 static PocketmageTOUCH pm_touch(cap);
 
-class Adafruit_MPR121;   
-class PocketmageEink;
-
 static constexpr const char* TAG = "TOUCH";
 
 // Setup for Touch Class
@@ -29,8 +26,13 @@ void PocketmageTOUCH::updateScrollFromTouch() {
   uint16_t touched = cap_.touched();
   int newTouch = -1;
 
-  for (int i = 0; i < 9; ++i)
-    if (touched & (1 << i)) { newTouch = i; break; }
+  // Prioritize lowest pad index to cleanly handle physical finger overlap
+  for (int i = 0; i < 9; ++i) {
+    if (touched & (1 << i)) { 
+      newTouch = i; 
+      break; 
+    }
+  }
 
   unsigned long now = millis();
 
@@ -55,7 +57,7 @@ void PocketmageTOUCH::updateScrollFromTouch() {
   }
 }
 
-bool PocketmageTOUCH::updateScroll(int maxScroll,ulong& lineScroll) {
+bool PocketmageTOUCH::updateScroll(int maxScroll, ulong& lineScroll) {
 
   static int lastTouchPos = -1;
   static unsigned long lastTouchTime = 0;
@@ -69,10 +71,6 @@ bool PocketmageTOUCH::updateScroll(int maxScroll,ulong& lineScroll) {
   for (int i = 0; i < 9; i++) {
     if (touched & (1 << i)) {
       touchPos = i;
-
-      //ESP_LOGI(tag, "Prev pad: %d\tTouched pad: %d\n", lastTouchPos,
-      //         touchPos);  // TODO(logging): come up with more descriptive tags
-
       break;
     }
   }
@@ -80,8 +78,6 @@ bool PocketmageTOUCH::updateScroll(int maxScroll,ulong& lineScroll) {
   unsigned long currentTime = millis();
 
   if (touchPos != -1) {  // If a touch is detected
-    //ESP_LOGI(tag, "Touch detected\n");
-
     if (lastTouchPos != -1) {  // Compare with previous touch
       int touchDelta = abs(touchPos - lastTouchPos);
       if (touchDelta <= 2) {  // Ignore large jumps
@@ -98,7 +94,7 @@ bool PocketmageTOUCH::updateScroll(int maxScroll,ulong& lineScroll) {
     }
 
     lastTouchPos = touchPos;      // update tracked touch
-    lastTouch_ = touchPos;         // <--- update UI flag
+    lastTouch_ = touchPos;        // <--- update UI flag
     lastTouchTime = currentTime;  // reset timeout
   } else if (lastTouchPos != -1 && (currentTime - lastTouchTime > TOUCH_TIMEOUT_MS)) {
     // Timeout: reset both
