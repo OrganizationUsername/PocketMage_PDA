@@ -11,7 +11,7 @@
 
 // CONFIGURATION & SETTINGS
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////|
-#define KB_COOLDOWN 50                          // Keypress cooldown
+#define KB_COOLDOWN 3                           // Keypress cooldown
 #define FULL_REFRESH_AFTER 5                    // Full refresh after N partial refreshes (CHANGE WITH CAUTION)
 #define MAX_FILES 10                            // Number of files to store
 #define FORMAT_SPIFFS_IF_FAILED true            // Format the SPIFFS filesystem if mount fails

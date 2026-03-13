@@ -3,11 +3,16 @@ static constexpr const char* TAG = "UTILS";
 
 static uint8_t prevSec = 0;
 
+// DRY helper for battery math to prevent duplicated magic numbers
+inline float getBatteryVoltage() {
+  return (analogRead(BAT_SENS) * (3.3 / 4095.0) * 2) + 0.2;
+}
+
 void printDebug() {
   DateTime now = CLOCK().nowDT();
   if (now.second() != prevSec) {
     prevSec = now.second();
-    float batteryVoltage = (analogRead(BAT_SENS) * (3.3 / 4095.0) * 2) + 0.2;
+    float batteryVoltage = getBatteryVoltage();
 
     // Display GPIO states and system info
     ESP_LOGD(
@@ -25,6 +30,7 @@ void checkTimeout() {
   int randomScreenSaver = 0;
   CLOCK().setTimeoutMillis(millis());
   ESP_LOGV(TAG, "checking timeout");
+  
   // Trigger timeout deep sleep
   if (!disableTimeout) {
     if (CLOCK().getTimeDiff() >= TIMEOUT * 1000) {
@@ -32,20 +38,21 @@ void checkTimeout() {
 
       // Give a chance to keep device awake
       OLED().oledWord("  Going to sleep!  ");
-      int i = millis();
-      int j = millis();
+      unsigned long i = millis();
+      unsigned long j = millis();
       while ((j - i) <= 4000) {  // 4 sec
         j = millis();
-        if (digitalRead(KB_IRQ) == 0) {
+        // FIX: Check centralized KB stack so USB keyboards can cancel sleep too
+        if (KB().updateKeypress() != 0) {
           OLED().oledWord("Good Save!");
           delay(500);
           CLOCK().setPrevTimeMillis(millis());
           keypad.flush();
           return;
         }
+        vTaskDelay(pdMS_TO_TICKS(10)); // Prevent watchdog starvation during this while loop
       }
-// OTA_APP: Remove saveEditingFile
-// Save current work
+
 #if !OTA_APP
       saveEditingFile();
 #else
@@ -57,30 +64,9 @@ void checkTimeout() {
 #endif
 
       switch (CurrentAppState) {
-// OTA_APP skip TXT case
 #if !OTA_APP
         case TXT:
           if (SLEEPMODE == "TEXT" && PM_SDAUTO().getEditingFile() != "" && !OTA_APP) {
-            /*
-            EINK().setFullRefreshAfter(FULL_REFRESH_AFTER + 1);
-            display.setFullWindow();
-            EINK().einkTextDynamic(true, true);
-
-            display.setFont(&FreeMonoBold9pt7b);
-
-            display.fillRect(0, display.height() - 26, display.width(), 26, GxEPD_WHITE);
-            display.drawRect(0, display.height() - 20, display.width(), 20, GxEPD_BLACK);
-            display.setCursor(4, display.height() - 6);
-            //display.drawBitmap(display.width() - 30, display.height() - 20, KBStatusallArray[6],
-            30,
-            //                20, GxEPD_BLACK);
-            EINK().statusBar(editingFile, true);
-
-            display.fillRect(320 - 86, 240 - 52, 87, 52, GxEPD_WHITE);
-            display.drawBitmap(320 - 86, 240 - 52, sleep1, 87, 52, GxEPD_BLACK);
-
-            // Put device to sleep with alternate sleep screen
-            */
             pocketmage::deepSleep(true);
           } else
             pocketmage::deepSleep();
@@ -99,15 +85,13 @@ void checkTimeout() {
   if (PWR_BTN_event && CurrentHOMEState != NOWLATER) {
     PWR_BTN_event = false;
     ESP_LOGE(TAG, "Power Button Event: Sleeping now");
-// OTA_APP: Remove saveEditingFile
-// Save current work
+
 #if !OTA_APP
     saveEditingFile();
 #endif
 
     if (digitalRead(CHRG_SENS) == HIGH && !OTA_APP) {
       // Save last state
-
       prefs.begin("PocketMage", false);
       prefs.putInt("CurrentAppState", static_cast<int>(CurrentAppState));
       prefs.putString("editingFile", PM_SDAUTO().getEditingFile());
@@ -115,7 +99,7 @@ void checkTimeout() {
 
       CurrentAppState = HOME;
       CurrentHOMEState = NOWLATER;
-// OTA_APP: remove updateTaskArray and sortTasksByDueDate
+
 #if !OTA_APP
       updateTaskArray();
       sortTasksByDueDate(tasks);
@@ -134,21 +118,17 @@ void checkTimeout() {
     } else {
       ESP_LOGD(TAG, "Not charging");
       switch (CurrentAppState) {
-        // OTA_APP skip TXT case
         case TXT:
           if (SLEEPMODE == "TEXT" && PM_SDAUTO().getEditingFile() != "" && !OTA_APP) {
             ESP_LOGE(TAG, "text sleep mode");
             EINK().setFullRefreshAfter(FULL_REFRESH_AFTER + 1);
             display.setFullWindow();
-            //EINK().einkTextDynamic(true, true);
             display.setFont(&FreeMonoBold9pt7b);
 
             display.fillRect(0, display.height() - 26, display.width(), 26, GxEPD_WHITE);
             display.drawRect(0, display.height() - 20, display.width(), 20, GxEPD_BLACK);
             display.setCursor(4, display.height() - 6);
-            // display.drawBitmap(display.width() - 30, display.height() - 20, KBStatusallArray[6],
-            // 30,
-            //                 20, GxEPD_BLACK);
+            
             EINK().statusBar(PM_SDAUTO().getEditingFile(), true);
 
             display.fillRect(320 - 86, 240 - 52, 87, 52, GxEPD_WHITE);
@@ -168,12 +148,6 @@ void checkTimeout() {
 
   } else if (PWR_BTN_event && CurrentHOMEState == NOWLATER) {
     ESP_LOGE(TAG, "In NOWLATER state, returning home");
-    // Load last state
-    /*prefs.begin("PocketMage", true);
-    SD().setEditingFile(prefs.getString("editingFile", "");
-    if (HOME_ON_BOOT) CurrentAppState = HOME;
-    else CurrentAppState = static_cast<AppState>(prefs.getInt("CurrentAppState", HOME));
-    prefs.end();*/
     loadState();
     keypad.flush();
 
@@ -219,8 +193,6 @@ void loadState(bool changeState) {
 
   u8g2.setContrast(OLED_BRIGHTNESS);
 
-// OTA_APP: remove if statement
-// Update State (if needed)
 #if !OTA_APP  // POCKETMAGE_OS
   if (HOME_ON_BOOT) {
     CurrentAppState = HOME;
@@ -231,78 +203,34 @@ void loadState(bool changeState) {
     KB().setKeyboardState(NORMAL);
     char inchar = KB().updateKeypress();
     switch (inchar) {
-      case 'h':
-        CurrentAppState = HOME;
-        break;
-      case 'u':
-        CurrentAppState = USB_APP;
-        break;
-      case 'f':
-        CurrentAppState = FILEWIZ;
-        break;
-      case 't':
-        CurrentAppState = TASKS;
-        break;
-      case 'n':
-        CurrentAppState = TXT;
-        break;
-      case 's':
-        CurrentAppState = SETTINGS;
-        break;
-      case 'c':
-        CurrentAppState = CALENDAR;
-        break;
-      case 'j':
-        CurrentAppState = JOURNAL;
-        break;
-      case 'd':
-        CurrentAppState = LEXICON;
-        break;
-      case 'x':
-        CurrentAppState = TERMINAL;
-        break;
-      case 'l':
-        CurrentAppState = APPLOADER;
-        break;
-      default:
-        break;
+      case 'h': CurrentAppState = HOME; break;
+      case 'u': CurrentAppState = USB_APP; break;
+      case 'f': CurrentAppState = FILEWIZ; break;
+      case 't': CurrentAppState = TASKS; break;
+      case 'n': CurrentAppState = TXT; break;
+      case 's': CurrentAppState = SETTINGS; break;
+      case 'c': CurrentAppState = CALENDAR; break;
+      case 'j': CurrentAppState = JOURNAL; break;
+      case 'd': CurrentAppState = LEXICON; break;
+      case 'x': CurrentAppState = TERMINAL; break;
+      case 'l': CurrentAppState = APPLOADER; break;
+      default: break;
     }
 
     keypad.flush();
 
     // Initialize boot app if needed
     switch (CurrentAppState) {
-      case HOME:
-        HOME_INIT();
-        break;
-      case TXT:
-        TXT_INIT();  // TODO: Does not work? Crash on startup
-        // HOME_INIT();
-        break;
-      case SETTINGS:
-        SETTINGS_INIT();
-        break;
-      case TASKS:
-        TASKS_INIT();
-        break;
-      case USB_APP:
-        HOME_INIT();
-        break;
-      case CALENDAR:
-        CALENDAR_INIT();
-        break;
-      case LEXICON:
-        LEXICON_INIT();
-        break;
-      case JOURNAL:
-        JOURNAL_INIT();
-        break;
-      case TERMINAL:
-        TERMINAL_INIT();
-        break;
-      default:
-        HOME_INIT();
-        break;
+      case HOME:      HOME_INIT(); break;
+      case TXT:       TXT_INIT(); break; 
+      case SETTINGS:  SETTINGS_INIT(); break;
+      case TASKS:     TASKS_INIT(); break;
+      case USB_APP:   HOME_INIT(); break;
+      case CALENDAR:  CALENDAR_INIT(); break;
+      case LEXICON:   LEXICON_INIT(); break;
+      case JOURNAL:   JOURNAL_INIT(); break;
+      case TERMINAL:  TERMINAL_INIT(); break;
+      default:        HOME_INIT(); break;
     }
   }
 #endif  // POCKETMAGE_OS
@@ -310,23 +238,22 @@ void loadState(bool changeState) {
 }
 
 void updateBattState() {
-  // Read and scale voltage (add calibration offset if needed)
-  float rawVoltage = (analogRead(BAT_SENS) * (3.3 / 4095.0) * 2) + 0.2;
+  float rawVoltage = getBatteryVoltage();
 
-  // Moving average smoothing (adjust alpha for responsiveness)
+  // Moving average smoothing
   static float filteredVoltage = rawVoltage;
-  const float alpha = 0.1;  // Low-pass filter constant (lower = smoother, slower response)
+  const float alpha = 0.1;  
   filteredVoltage = alpha * rawVoltage + (1.0 - alpha) * filteredVoltage;
 
   static float prevVoltage = 0.0;
-  static int prevBattState = -1;  // Ensure valid initial state
-  const float threshold = 0.05;   // Hysteresis threshold
+  static int prevBattState = -1;  
+  const float threshold = 0.05;   
 
   int newState = battState;
 
   // Charging state overrides everything
   MP2722::MP2722_ChargeStatus chg;
-  if (/*digitalRead(CHRG_SENS) == 1*/ PowerSystem.getChargeStatus(chg) &&
+  if (PowerSystem.getChargeStatus(chg) &&
       (chg.code == 0b001 || chg.code == 0b010 || chg.code == 0b011 || chg.code == 0b100 ||
        chg.code == 0b101)) {
     newState = 5;
@@ -338,12 +265,9 @@ void updateBattState() {
         OLED().oledWord("Battery Critial!");
         delay(1000);
 
-// OTA_APP: Remove saveEditingFile
 #if !OTA_APP
-        // Save current work
         saveEditingFile();
 #endif
-        // Put device to sleep
         pocketmage::deepSleep(false);
       }
     }
@@ -365,7 +289,6 @@ void updateBattState() {
   if (newState != battState) {
     battState = newState;
     prevBattState = newState;
-    // newState = true;
   }
 
   prevVoltage = filteredVoltage;
@@ -376,13 +299,14 @@ String textPrompt(String promptText, String prefix) {
   String currentLine = "";
   int cursor_pos = 0;
   long lastInput = millis();
+  bool redraw = true; // FIX: Only redraw OLED when necessary
 
   for (;;) {
-    // Run background tasks
-    #if !OTA_APP // POCKETMAGE_OS
+    #if !OTA_APP 
       if (!noTimeout)  checkTimeout();
       if (DEBUG_VERBOSE) printDebug();
     #endif
+    
     updateBattState();
     KB().checkUSBKB();
 
@@ -393,17 +317,18 @@ String textPrompt(String promptText, String prefix) {
     if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
       char inchar = KB().updateKeypress();
 
-      if (inchar != 0) lastInput = millis();
+      if (inchar != 0) {
+        lastInput = millis();
+        KBBounceMillis = currentMillis; // FIX: Reset debounce timer
+        redraw = true;
+      }
 
       // HANDLE INPUTS
-      // No char recieved
       if (inchar == 0) ;
-      // CR Recieved
       else if (inchar == 13) {
         cursor_pos = 0;
         break;
       }
-      // SHIFT Recieved
       else if (inchar == 17) {
         if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) {
           KB().setKeyboardState(NORMAL);
@@ -413,7 +338,6 @@ String textPrompt(String promptText, String prefix) {
           KB().setKeyboardState(SHIFT);
         }
       }
-      // FN Recieved
       else if (inchar == 18) {
         if (KB().getKeyboardState() == FUNC || KB().getKeyboardState() == FN_SHIFT) {
           KB().setKeyboardState(NORMAL);
@@ -423,7 +347,6 @@ String textPrompt(String promptText, String prefix) {
           KB().setKeyboardState(FUNC);
         }
       }
-      // BKSP Recieved
       else if (inchar == 8) {
         if (currentLine.length() > 0 && cursor_pos != 0) {
           if (cursor_pos == currentLine.length()) {
@@ -434,67 +357,49 @@ String textPrompt(String promptText, String prefix) {
           cursor_pos--;
         }
       }
-      // LEFT
       else if (inchar == 19) {
-        if (cursor_pos > 0) {
-          cursor_pos--;
-        }
+        if (cursor_pos > 0) cursor_pos--;
       }
-      // RIGHT
       else if (inchar == 21) {
-        if (cursor_pos < currentLine.length()) {
-          cursor_pos++;
-        }
+        if (cursor_pos < currentLine.length()) cursor_pos++;
       }
-      // CENTER
       else if (inchar == 20) {
       }
-      // SHIFT+LEFT
       else if (inchar == 28) {
         cursor_pos = 0;
         KB().setKeyboardState(NORMAL);
       }
-      // SHIFT+RIGHT
       else if (inchar == 30) {
         cursor_pos = currentLine.length();
         KB().setKeyboardState(NORMAL);
       }
-      // SHIFT+CENTER
       else if (inchar == 29) {
         KB().setKeyboardState(NORMAL);
       }
-      // FN+LEFT
       else if (inchar == 12) {
         currentLine = "_EXIT_";
         break;
       }
-      // FN+RIGHT
       else if (inchar == 6) {
         KB().setKeyboardState(NORMAL);
       }
-      // FN+CENTER
       else if (inchar == 7) {
         currentLine = "";
         cursor_pos = 0;
         KB().setKeyboardState(NORMAL);
       }
-      // FN+SHIFT+LEFT
       else if (inchar == 24) {
         KB().setKeyboardState(NORMAL);
       }
-      // FN+SHIFT+RIGHT
       else if (inchar == 26) {
         KB().setKeyboardState(NORMAL);
       }
-      // FN+SHIFT+CENTER
       else if (inchar == 25) {
         KB().setKeyboardState(NORMAL);
       }
-      // TAB, SHIFT+TAB / FN+TAB, FN+SHIFT+TAB
       else if (inchar == 9 || inchar == 14) {
         KB().setKeyboardState(NORMAL);
       } else {
-        // split line at cursor_pos
         if (cursor_pos == 0) {
           currentLine = inchar + currentLine;
         } else if (cursor_pos == currentLine.length()) {
@@ -506,18 +411,26 @@ String textPrompt(String promptText, String prefix) {
         }
         cursor_pos++;
         if (inchar >= 48 && inchar <= 57) {
-        }  // Only leave FN on if typing numbers
+        } 
         else if (KB().getKeyboardState() != NORMAL) {
           KB().setKeyboardState(NORMAL);
         }
       }
 
-      currentMillis = millis();
-      // Make sure oled only updates at OLED_MAX_FPS
-      if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
-        OLEDFPSMillis = currentMillis;
+      // Handle idle timeouts triggering a visual update
+      bool isIdle = (millis() - lastInput > IDLE_TIME);
+      static bool wasIdle = false;
+      if (isIdle != wasIdle) {
+         redraw = true;
+         wasIdle = isIdle;
+      }
 
-        if (millis() - lastInput > IDLE_TIME) {
+      // FIX: Only spam SPI bus if redraw flag is true
+      if (redraw && (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS))) {
+        OLEDFPSMillis = currentMillis;
+        redraw = false;
+
+        if (isIdle) {
           mageIdle(true);
         } else {
           resetIdle();
@@ -539,11 +452,11 @@ int boolPrompt(String promptText) {
   OLED().oledWord(promptText + " (y/n)");
 
   for (;;) {
-    // Run background tasks
-    #if !OTA_APP // POCKETMAGE_OS
+    #if !OTA_APP 
       if (!noTimeout)  checkTimeout();
       if (DEBUG_VERBOSE) printDebug();
     #endif
+    
     updateBattState();
 
     int currentMillis = millis();
@@ -551,17 +464,17 @@ int boolPrompt(String promptText) {
     if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
       char inchar = KB().updateKeypress();
 
+      if (inchar != 0) {
+          KBBounceMillis = currentMillis; // FIX: Update debounce timer
+      }
+
       // HANDLE INPUTS
-      // No char recieved
-      if (inchar == 0) ;
-      else if (inchar == 'y' || inchar == 'Y') {
+      // FIX: Ignored invalid keys entirely instead of immediately aborting prompt
+      if (inchar == 'y' || inchar == 'Y') {
         return 1;
       }
       else if (inchar == 'n' || inchar == 'N') {
         return 0;
-      }
-      else {
-        return -1;
       }
     }
 
@@ -572,15 +485,14 @@ int boolPrompt(String promptText) {
 
 void waitForKeypress(String message) {
   KB().setKeyboardState(NORMAL); 
-  
   OLED().oledWord(message, false, false, "Press any key to continue...");
 
   for (;;) {
-    // Run background tasks
-    #if !OTA_APP // POCKETMAGE_OS
+    #if !OTA_APP 
       if (!noTimeout)  checkTimeout();
       if (DEBUG_VERBOSE) printDebug();
     #endif
+    
     updateBattState();
 
     int currentMillis = millis();
@@ -588,9 +500,8 @@ void waitForKeypress(String message) {
     if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
       char inchar = KB().updateKeypress();
 
-      // If any key is pressed, break the loop and return
       if (inchar != 0) {
-        KBBounceMillis = currentMillis; // Reset debounce timer
+        KBBounceMillis = currentMillis; 
         return; 
       }
     }
@@ -601,10 +512,8 @@ void waitForKeypress(String message) {
 }
 
 void checkCrashState() {
-  // Get the high-level reason the CPU just rebooted
   esp_reset_reason_t reset_reason = esp_reset_reason();
 
-  // Check if the reset was caused by a software crash or Watchdog Timeout
   if (reset_reason == ESP_RST_PANIC || 
       reset_reason == ESP_RST_WDT || 
       reset_reason == ESP_RST_TASK_WDT || 
@@ -612,7 +521,6 @@ void checkCrashState() {
     
     String crashMsg = "Crash: ";
 
-    // Map the high-level ESP-IDF reason
     switch (reset_reason) {
       case ESP_RST_PANIC:    crashMsg += "Panic/Exception"; break;
       case ESP_RST_WDT:      crashMsg += "Watchdog"; break;
@@ -621,29 +529,22 @@ void checkCrashState() {
       default:               crashMsg += "Unknown"; break;
     }
 
-    // Grab the low-level ROM hardware reset reason for CPU0 (ESP32-S3 specific)
     int romReason = (int)esp_rom_get_reset_reason(0);
     crashMsg += " (Code " + String(romReason) + ")";
 
-    // 1. Force the system to boot to the HOME screen to escape boot-loops
     prefs.begin("PocketMage", false);
     prefs.putInt("CurrentAppState", HOME);
     prefs.end();
 
-    // 2. Clear volatile SD states that might have caused the crash
     PM_SDAUTO().setEditingFile("");
-
-    // 3. Halt the boot process and display the error on the OLED
     waitForKeypress(crashMsg);
   }
 }
 
-// OTA_APP: Remove definition of saveEditingFile
 #if !OTA_APP
 void saveEditingFile() {
   if (!OTA_APP) {
     OLED().oledWord("Saving Work");
-    // pocketmage::file::saveFile();
     String savePath = PM_SDAUTO().getEditingFile();
     if (savePath != "" && savePath != "-" && savePath != "/temp.txt" && fileLoaded) {
       if (!savePath.startsWith("/"))
