@@ -140,7 +140,7 @@ void checkTimeout() {
             ESP_LOGE(TAG, "text sleep mode");
             EINK().setFullRefreshAfter(FULL_REFRESH_AFTER + 1);
             display.setFullWindow();
-            EINK().einkTextDynamic(true, true);
+            //EINK().einkTextDynamic(true, true);
             display.setFont(&FreeMonoBold9pt7b);
 
             display.fillRect(0, display.height() - 26, display.width(), 26, GxEPD_WHITE);

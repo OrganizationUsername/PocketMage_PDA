@@ -60,7 +60,6 @@ public:
   void drawStatusBar(const String& input);
   void computeFontMetrics_();
   void setTXTFont(const GFXfont* font);
-  void einkTextDynamic(bool doFull, bool noRefresh=false);
   void resetDisplay(bool clearScreen=true,uint16_t color = GxEPD_WHITE);
   int  countLines(const String& input, size_t maxLineLength = 29);
   uint16_t getEinkTextWidth(const String& s);

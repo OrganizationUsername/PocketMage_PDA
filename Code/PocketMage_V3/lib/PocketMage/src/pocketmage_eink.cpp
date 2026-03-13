@@ -1,4 +1,4 @@
-//  oooooooooooo         ooooo ooooo      ooo oooo    oooo  //
+//  oooooooooooo         ooooo ooooo       ooo oooo    oooo  //
 //  `888'     `8         `888' `888b.     `8' `888   .8P'   //
 //   888                  888   8 `88b.    8   888  d8'     //
 //   888oooo8    8888888  888   8   `88b.  8   88888[       //
@@ -43,6 +43,7 @@ void PocketmageEink::refresh() {
   display_.fillScreen(GxEPD_WHITE);
   display_.hibernate();
 }
+
 void PocketmageEink::multiPassRefresh(int passes) {
   display_.display(false);
   if (passes > 0) {
@@ -57,12 +58,14 @@ void PocketmageEink::multiPassRefresh(int passes) {
   display_.fillScreen(GxEPD_WHITE);
   display_.hibernate();
 }
+
 void PocketmageEink::setFastFullRefresh(bool setting) {
-  PanelT::useFastFullUpdate = setting;
-  /*if (PanelT::useFastFullUpdate != setting) {
+  // FIX: Only write to the fast update flag if it is actually changing state
+  if (PanelT::useFastFullUpdate != setting) {
     PanelT::useFastFullUpdate = setting;
-  }*/
+  }
 }
+
 void PocketmageEink::statusBar(const String& input, bool fullWindow) {
   setTXTFont(&FreeMonoBold9pt7b);
   if (!fullWindow){
@@ -75,6 +78,7 @@ void PocketmageEink::statusBar(const String& input, bool fullWindow) {
 
   display_.drawRect(display_.width() - 30, display_.height() - 20, 30, 20, GxEPD_BLACK);
 }
+
 void PocketmageEink::drawStatusBar(const String& input) {
   display_.fillRect(0, display_.height() - 26, display_.width(), 26, GxEPD_WHITE);
   display_.drawRect(0, display_.height() - 20, display_.width(), 20, GxEPD_BLACK);
@@ -82,18 +86,24 @@ void PocketmageEink::drawStatusBar(const String& input) {
   display_.setCursor(4, display_.height() - 6);
   display_.print(input);
 }
+
 void PocketmageEink::computeFontMetrics_() {
   int16_t x1, y1; 
   uint16_t charWidth, charHeight;
+  
   // GET AVERAGE CHAR WIDTH
   display_.getTextBounds("abcdefghijklmnopqrstuvwxyz", 0, 0, &x1, &y1, &charWidth, &charHeight);
-  charWidth = charWidth / 52; // check if intended 
+  
+  // FIX: The alphabet is 26 characters, not 52! 
+  charWidth = charWidth / 26; 
+  
   maxCharsPerLine_  = display_.width() / charWidth;
 
   display_.getTextBounds("H", 0, 0, &x1, &y1, &charWidth, &charHeight);
   fontHeight_ = charHeight;
   maxLines_   = (display_.height() - 26) / (fontHeight_ + lineSpacing_);
 }
+
 void PocketmageEink::setTXTFont(const GFXfont* font) {
   // SET THE FONT
   const bool changed = (currentFont_ != font);
@@ -102,53 +112,13 @@ void PocketmageEink::setTXTFont(const GFXfont* font) {
   // maxCharsPerLine and maxLines
   if (changed) computeFontMetrics_();
 }
-void PocketmageEink::einkTextDynamic(bool doFull, bool noRefresh) {
-  if (!currentFont_) return;
-  
-   // SET FONT
-  setTXTFont(currentFont_);
-
-  // ITERATE AND DISPLAY
-  uint8_t size = allLines.size();
-  uint8_t displayLines = maxLines_;
-
-  if (displayLines > size) displayLines = size;
-
-  int scrollOffset = TOUCH().getDynamicScroll();
-  if (scrollOffset < 0) scrollOffset = 0;
-  if (scrollOffset > size - displayLines) scrollOffset = size - displayLines;
-  
-
-  if (doFull) {
-    display_.fillScreen(GxEPD_WHITE);
-    for (uint8_t i = size - displayLines - scrollOffset; i < size - scrollOffset; i++) {
-      if ((allLines)[i].length() == 0) continue;
-      display_.setFullWindow();
-      //display_.fillRect(0, (fontHeight_ + lineSpacing_) * (i - (size - displayLines - scrollOffset)), display.width(), (fontHeight_ + lineSpacing_), GxEPD_WHITE)
-      display_.setCursor(0, fontHeight_ + ((fontHeight_ + lineSpacing_) * (i - (size - displayLines - scrollOffset))));
-      display_.print((allLines)[i]);
-    }
-  } 
-  // PARTIAL REFRESH, ONLY SEND LAST LINE
-  else {
-    if ((allLines)[size - displayLines - scrollOffset].length() > 0) {
-      int y = (fontHeight_ + lineSpacing_) * (size - displayLines - scrollOffset);
-      display_.setPartialWindow(0, y, display_.width(), (fontHeight_ + lineSpacing_));
-      display_.fillRect(0, y, display_.width(), (fontHeight_ + lineSpacing_), GxEPD_WHITE);
-      display_.setCursor(0, fontHeight_ + y);
-      display_.print((allLines)[size - displayLines - scrollOffset]);
-    }
-  }
-  
-
-  drawStatusBar(String("L:") + String(allLines.size()) + " " + PM_SDAUTO().getEditingFile());
-}
 
 void PocketmageEink::resetDisplay(bool clearScreen, uint16_t color) {
   display_.setRotation(3);
   display_.setFullWindow();
   if (clearScreen) display_.fillScreen(color);
 }
+
 int PocketmageEink::countLines(const String& input, size_t maxLineLength) {
   size_t inputLength = input.length();
   uint8_t charCounter = 0;
@@ -168,6 +138,7 @@ int PocketmageEink::countLines(const String& input, size_t maxLineLength) {
 
   return lineCounter;
 }
+
 void PocketmageEink::forceSlowFullUpdate(bool force)            { forceSlowFullUpdate_ = force; }
 
 // Setup for Eink Class
@@ -194,7 +165,8 @@ void setupEink() {
 
 uint16_t PocketmageEink::getEinkTextWidth(const String& s) {
   int16_t x1, y1; uint16_t w, h;
-  display.getTextBounds(s, 0, 0, &x1, &y1, &w, &h);
+  // FIX: Swapped global 'display' for local class member 'display_'
+  display_.getTextBounds(s, 0, 0, &x1, &y1, &w, &h);
   return w;
 }
 
