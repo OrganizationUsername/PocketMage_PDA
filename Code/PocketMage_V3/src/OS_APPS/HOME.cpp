@@ -161,6 +161,10 @@ String commandSelect(String command) {
   else if (command == "journ" || command == "journal" || command == "daily" || command == "8") {
     JOURNAL_INIT();
   }
+  else if (command == "version" || command == "ver") {
+    OLED().oledWord("PMOS: " + String(OS_VERSION_STR));
+    delay(2000);
+  }
   /////////////////////////////
   else if (command == "i farted") {
     returnText = "That smells";
