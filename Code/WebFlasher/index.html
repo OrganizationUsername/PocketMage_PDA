@@ -497,6 +497,7 @@
             <p>When "Preserve user data" is checked, only application partition will be flashed, keeping your settings
                 and saved content.</p>
             <p>When unchecked, a complete installation will be performed, which erases all data and settings.</p>
+            <p>Note: SD card data is NOT affected by this option.</p>
         </div>
 
         <div class="info-box">
@@ -696,7 +697,7 @@
             flashBtn.disabled = false;
             const modeText = preserveData ? 'Update (preserve data)' : 'Full installation';
             flashBtn.textContent = `Flash ${version}`;
-            statusDiv.textContent = `Ready to flash ${version} (${modeText})`;
+            statusDiv.textContent = `Ready to flash ${version} - ${modeText}`;
 
             const devFormatted = formatDevBuild(version);
             if (devFormatted) {
