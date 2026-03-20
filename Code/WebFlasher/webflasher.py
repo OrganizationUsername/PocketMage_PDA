@@ -53,7 +53,6 @@ class FirmwareReleaseManager:
             print("No firmware directory in gh-pages yet")
             return
         
-        # Copy ALL release versions (non-dev) - these persist forever
         release_dirs = self.get_version_dirs(gh_firmware, "*")
         release_dirs = [d for d in release_dirs if not self.is_dev_version(d)]
         
@@ -65,25 +64,20 @@ class FirmwareReleaseManager:
                 shutil.rmtree(dst)
             shutil.copytree(src, dst)
         
-        # Handle dev builds - keep only the newest N
         dev_dirs = self.get_version_dirs(gh_firmware, "dev-*")
         
         if dev_dirs:
-            # Determine how many old dev builds to keep
             if self.is_dev_version(current_version):
-                # Current is dev, so keep (N-1) old ones
                 keep_count = self.keep_dev_count - 1
                 print(f"  Current build is dev, keeping {keep_count} previous dev builds")
             else:
-                # Current is release, keep N dev builds
                 keep_count = self.keep_dev_count
                 print(f"  Current build is release, keeping {keep_count} dev builds")
             
-            # Keep only the newest ones (sorted list, take from end)
             dev_dirs_to_keep = dev_dirs[-keep_count:] if keep_count > 0 else []
             
             for dev_dir in dev_dirs_to_keep: 
-                if dev_dir != current_version: # Don't copy current version (already in workspace)
+                if dev_dir != current_version: 
                     print(f"  Preserving dev build: {dev_dir}")
                     src = gh_firmware / dev_dir
                     dst = self.firmware_dir / dev_dir
@@ -99,30 +93,24 @@ class FirmwareReleaseManager:
         """
         try:
             from packaging import version
-            return (0, version.parse(version_str))
+            return (1, version.parse(version_str))
         except Exception:
-            # For non-PEP 440 versions, use lowercase string for consistent sorting
-            return (1, version_str.lower())
+            return (0, version_str.lower())
     
     def rebuild_manifest_index(self):
         """Rebuild manifest-index.json from actual firmware directories."""
         if not self.firmware_dir.exists():
             versions = []
         else:
-            # Get all versions
             all_dirs = self.get_version_dirs(self.firmware_dir)
             
-            # Separate dev and release versions
             dev_versions = [v for v in all_dirs if self.is_dev_version(v)]
             release_versions = [v for v in all_dirs if not self.is_dev_version(v)]
             
-            # Sort: dev versions newest first, then releases newest first (using version sort)
             dev_versions.sort(reverse=True)
             
-            # For releases, try to sort by version number with fallback for non-standard versions
             release_versions.sort(key=self._safe_version_sort_key, reverse=True)
             
-            # Combine: dev first, then releases
             versions = dev_versions + release_versions
         
         manifest_index = {"versions": versions}
@@ -138,16 +126,13 @@ class FirmwareReleaseManager:
         """Main execution flow."""
         print("Preserving existing releases and dev builds from gh-pages...")
         
-        # Ensure firmware directory exists
         self.firmware_dir.mkdir(parents=True, exist_ok=True)
         
-        # Clone gh-pages and preserve versions
         if self.clone_gh_pages(repo_url, gh_pages_dir):
             self.preserve_from_gh_pages(gh_pages_dir, current_version)
         else:
             print("No existing gh-pages branch found")
         
-        # Rebuild the manifest index
         self.rebuild_manifest_index()
         
         print("\n✓ Firmware release management complete")
