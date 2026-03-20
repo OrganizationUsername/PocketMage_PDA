@@ -606,18 +606,16 @@
                 const releaseVersions = data.versions
                     .filter(v => !v.startsWith('dev-'))
                     .sort((a, b) => {
-                        const cleanA = a.replace(/^[^0-9]+/, '');
-                        const cleanB = b.replace(/^[^0-9]+/, '');
-                        const partsA = cleanA.split(/[-_.]/);
-                        const partsB = cleanB.split(/[-_.]/);
-                        for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
-                            const numA = parseInt(partsA[i] || "0", 10);
-                            const numB = parseInt(partsB[i] || "0", 10);
-                            if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+                        const numsA = (a.match(/\d+/g) || []).map(Number);
+                        const numsB = (b.match(/\d+/g) || []).map(Number);
+                        for (let i = 0; i < Math.max(numsA.length, numsB.length); i++) {
+                            const numA = numsA[i] || 0;
+                            const numB = numsB[i] || 0;
+                            if (numA !== numB) {
                                 return numB - numA;
                             }
                         }
-                        return a.localeCompare(b);
+                        return b.localeCompare(a);
                     });
 
                 const versionsToShow = releaseVersions.slice(0, NUMBER_OF_VERSIONS_SHOWN);
