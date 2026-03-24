@@ -505,7 +505,10 @@ int timePrompt(int defaultTime) {
     digits[2] = (defaultTime / 10) % 10;
     digits[3] = defaultTime % 10;
   }
-  
+
+  // X coordinates for the 4 digits (HHMM)
+  const int tX[4] = {93, 110, 131, 148};
+
   for (;;) {
     #if !OTA_APP 
       if (!noTimeout)  checkTimeout();
@@ -652,16 +655,19 @@ int timePrompt(int defaultTime) {
         break;
     }
 
-    // Draw digits
+    // Draw digits dynamically with inverted active block
     u8g2.setFont(u8g2_font_luBIS14_tn);
-    // Digit 0
-    u8g2.drawStr(93,16,String(digits[0]).c_str());
-    // Digit 1
-    u8g2.drawStr(110,16,String(digits[1]).c_str());
-    // Digit 2
-    u8g2.drawStr(131,16,String(digits[2]).c_str());
-    // Digit 3
-    u8g2.drawStr(148,16,String(digits[3]).c_str());
+    for (int i = 0; i < 4; i++) {
+      if (i == currentIndex) {
+        u8g2.setDrawColor(1);
+        u8g2.drawBox(tX[i], 0, 15, 20); // Draw white background block
+        u8g2.setDrawColor(0);               // Set text color to black
+      } else {
+        u8g2.setDrawColor(1);               // Standard white text
+      }
+      u8g2.drawStr(tX[i], 16, String(digits[i]).c_str());
+    }
+    u8g2.setDrawColor(1); // Reset for next draw cycle
 
     u8g2.sendBuffer(); // Required to push the frame to the OLED
 
@@ -685,7 +691,6 @@ String datePrompt(String defaultYYYYMMDD) {
   
   int d, m, y;
   
-  // If a valid YYYYMMDD string is passed, use it. Otherwise, default to RTC today.
   if (defaultYYYYMMDD.length() == 8) {
     y = defaultYYYYMMDD.substring(0, 4).toInt();
     m = defaultYYYYMMDD.substring(4, 6).toInt();
@@ -706,7 +711,6 @@ String datePrompt(String defaultYYYYMMDD) {
   digits[6] = (y / 10) % 10;
   digits[7] = y % 10;
 
-  // Custom X coordinates for the 8 digits (DD/MM/YYYY)
   const int dX[8] = {57, 74, 96, 113, 135, 152, 168, 185};
 
   for (;;) {
@@ -715,7 +719,6 @@ String datePrompt(String defaultYYYYMMDD) {
       if (DEBUG_VERBOSE) printDebug();
     #endif
 
-    // Update scroll
     int scrollVec = TOUCH().getScrollVector();
     if (scrollVec != 0) {
       
@@ -723,12 +726,10 @@ String datePrompt(String defaultYYYYMMDD) {
       int m = digits[2] * 10 + digits[3];
       int y = digits[4] * 1000 + digits[5] * 100 + digits[6] * 10 + digits[7];
 
-      // Protect against 0s
       if (d == 0) d = 1;
       if (m == 0) m = 1;
 
       if (currentIndex == 0) {
-        // Isolate Tens of Days (Wrap 0-3 without cascading)
         int d_tens = digits[0] + scrollVec;
         if (d_tens > 3) d_tens = 0;
         if (d_tens < 0) d_tens = 3;
@@ -739,7 +740,6 @@ String datePrompt(String defaultYYYYMMDD) {
         if (d == 0) d = 1;
       } 
       else if (currentIndex == 1) {
-        // Cascade Ones of Days (Rolls over months/years)
         d += scrollVec;
         while (d > getDaysInMonth(m, y)) {
           d -= getDaysInMonth(m, y);
@@ -753,7 +753,6 @@ String datePrompt(String defaultYYYYMMDD) {
         }
       }
       else if (currentIndex == 2) {
-        // Isolate Tens of Months (Wrap 0-1)
         int m_tens = digits[2] + scrollVec;
         if (m_tens > 1) m_tens = 0;
         if (m_tens < 0) m_tens = 1;
@@ -766,7 +765,6 @@ String datePrompt(String defaultYYYYMMDD) {
         if (d > maxDays) d = maxDays;
       }
       else if (currentIndex == 3) {
-        // Cascade Ones of Months (Rolls over years)
         m += scrollVec;
         while (m > 12) { m -= 12; y++; }
         while (m < 1) { m += 12; y--; }
@@ -775,13 +773,11 @@ String datePrompt(String defaultYYYYMMDD) {
         if (d > maxDays) d = maxDays;
       }
       else {
-        // Year scrolling
         if (currentIndex == 4) y += scrollVec * 1000;
         if (currentIndex == 5) y += scrollVec * 100;
         if (currentIndex == 6) y += scrollVec * 10;
         if (currentIndex == 7) y += scrollVec * 1;
         
-        // Clamp year
         if (y < 2000) y = 2000;
         if (y > 2199) y = 2199;
         
@@ -789,7 +785,6 @@ String datePrompt(String defaultYYYYMMDD) {
         if (d > maxDays) d = maxDays;
       }
 
-      // Re-apply to array
       digits[0] = d / 10;
       digits[1] = d % 10;
       digits[2] = m / 10;
@@ -800,37 +795,37 @@ String datePrompt(String defaultYYYYMMDD) {
       digits[7] = y % 10;
     }
     
-    // Update system state
     updateBattState();
     KB().checkUSBKB();
 
-    // Handle keyboard inputs
     KB().setKeyboardState(FUNC);
     char inchar = KB().updateKeypress();
 
-    // Left arrow or bksp
-    if (inchar == 12 || inchar == 8) {
+    if (inchar == 9 || inchar == 14) {
+      DateTime now = CLOCK().nowDT();
+      char dateBuf[11];
+      snprintf(dateBuf, sizeof(dateBuf), "%02d/%02d/%04d", 
+               now.day(), now.month(), now.year());
+      return String(dateBuf);
+    }
+    else if (inchar == 12 || inchar == 8) {
       if (currentIndex > 0) currentIndex--;
     }
-    // Right arrow
     else if (inchar == 6) {
       if (currentIndex < 7) currentIndex++;
     }
-    // Direct Numeric Entry (0-9)
     else if (inchar >= '0' && inchar <= '9') {
       int val = inchar - '0';
       digits[currentIndex] = val;
 
-      // Reconstruct to validate and clamp
       int d = digits[0] * 10 + digits[1];
       int m = digits[2] * 10 + digits[3];
       int y = digits[4] * 1000 + digits[5] * 100 + digits[6] * 10 + digits[7];
 
-      // Enforce limits to prevent impossible dates while typing
       if (m > 12) m = 12;
-      if (currentIndex > 1 && m == 0) m = 1; // Only force 1 if they finished typing month
+      if (currentIndex > 1 && m == 0) m = 1; 
 
-      int maxDays = getDaysInMonth(m == 0 ? 1 : m, y); // Safe fallback
+      int maxDays = getDaysInMonth(m == 0 ? 1 : m, y); 
       if (d > maxDays) d = maxDays;
       if (currentIndex <= 1 && d == 0 && currentIndex == 1) d = 1; 
 
@@ -843,10 +838,8 @@ String datePrompt(String defaultYYYYMMDD) {
       digits[6] = (y / 10) % 10;
       digits[7] = y % 10;
 
-      // Auto-advance
       if (currentIndex < 7) currentIndex++;
     }
-    // Enter 
     else if (inchar == 13) {
       char dateBuf[11];
       snprintf(dateBuf, sizeof(dateBuf), "%02d/%02d/%04d", 
@@ -857,25 +850,29 @@ String datePrompt(String defaultYYYYMMDD) {
       return String(dateBuf);
     }
 
-    // Draw interface
     u8g2.clearBuffer();
 
-    // Draw background
     u8g2.drawXBMP(0, 0, 256, 32, dateInput);
 
-    // Draw indicator block dynamically using array maps
-    const uint8_t* ind = leftRightIndicator1; // Default to middle indicator
-    if (currentIndex == 0) ind = leftRightIndicator0;       // Left cap
-    else if (currentIndex == 7) ind = leftRightIndicator2;  // Right cap
+    const uint8_t* ind = leftRightIndicator1; 
+    if (currentIndex == 0) ind = leftRightIndicator0;       
+    else if (currentIndex == 7) ind = leftRightIndicator2;  
     
-    // Offset indicator by -4 pixels from the current digit's X position
     u8g2.drawXBMP(dX[currentIndex] - 4, 21, 24, 11, ind);
 
-    // Draw all 8 digits
+    // Draw digits dynamically with inverted active block
     u8g2.setFont(u8g2_font_luBIS14_tn);
     for (int i = 0; i < 8; i++) {
-        u8g2.drawStr(dX[i], 16, String(digits[i]).c_str());
+      if (i == currentIndex) {
+        u8g2.setDrawColor(1);
+        u8g2.drawBox(dX[i], 0, 15, 20); // Draw white background block
+        u8g2.setDrawColor(0);               // Set text color to black
+      } else {
+        u8g2.setDrawColor(1);               // Standard white text
+      }
+      u8g2.drawStr(dX[i], 16, String(digits[i]).c_str());
     }
+    u8g2.setDrawColor(1); // Reset for next draw cycle
 
     u8g2.sendBuffer(); 
 
@@ -883,7 +880,6 @@ String datePrompt(String defaultYYYYMMDD) {
     yield();
   }
 }
-
 
 void waitForKeypress(String message) {
   KB().setKeyboardState(NORMAL); 
