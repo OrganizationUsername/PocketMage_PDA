@@ -693,14 +693,14 @@ void funcSelect(String command) {
     if (arg.length() == 0) {
       returnText = "Usage: potion <filename>";
     } else {
-      // Ensure .txt extension or add it
-      if (!arg.endsWith(".c")) {
+      // Ensure .c or .txt extension or add it
+      if (!arg.endsWith(".c") && !arg.endsWith(".txt")) {
         // Check if there's an extension at all
         int dotIdx = arg.lastIndexOf('.');
         if (dotIdx != -1) {
-          returnText = "Only .c files supported";
+          returnText = "Only .c and .txt files supported";
         } else {
-          // Append .txt automatically
+          // Append .c automatically
           arg += ".c";
         }
       }
