@@ -115,3 +115,48 @@ bool PocketmageTOUCH::updateScroll(int maxScroll, ulong& lineScroll) {
   }
   return updateScreen;
 }
+
+int PocketmageTOUCH::getScrollVector() {
+  static int lastTouchPos = -1;
+  static unsigned long lastTouchTime = 0;
+  int scrollVector = 0;
+
+  uint16_t touched = cap_.touched();
+  int touchPos = -1;
+
+  // Find the first active touch point (lowest index first)
+  for (int i = 0; i < 9; i++) {
+    if (touched & (1 << i)) {
+      touchPos = i;
+      break;
+    }
+  }
+
+  unsigned long currentTime = millis();
+
+  if (touchPos != -1) {  
+    // Reset system timeout so the device doesn't sleep while scrolling
+    CLOCK().setPrevTimeMillis(currentTime);
+
+    if (lastTouchPos != -1) {  
+      int touchDelta = abs(touchPos - lastTouchPos);
+      if (touchDelta > 0 && touchDelta <= 2) {  // Ignore large jumps / palm rejection
+        
+        // Calculate the directional vector. 
+        // Example: Moving from pad 4 to pad 3 returns +1. Pad 3 to 4 returns -1.
+        scrollVector = lastTouchPos - touchPos;
+      }
+    }
+
+    lastTouchPos = touchPos;      // update tracked touch
+    lastTouch_ = touchPos;        // update UI flag
+    lastTouchTime = currentTime;  // reset timeout
+    
+  } else if (lastTouchPos != -1 && (currentTime - lastTouchTime > TOUCH_TIMEOUT_MS)) {
+    // Timeout: reset both tracking variables
+    lastTouchPos = -1;
+    lastTouch_ = -1; 
+  }
+
+  return scrollVector;
+}

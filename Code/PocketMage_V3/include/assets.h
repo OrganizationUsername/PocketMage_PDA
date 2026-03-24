@@ -173,5 +173,12 @@ extern const unsigned char _mage_run_right5[] PROGMEM;
 extern const unsigned char _mage_run_right6[] PROGMEM;
 extern const unsigned char* run_right_allArray[7];
 
+extern const unsigned char leftRightIndicator0[] PROGMEM;
+extern const unsigned char leftRightIndicator1[] PROGMEM;
+extern const unsigned char leftRightIndicator2[] PROGMEM;
+
+extern const unsigned char timeInput[] PROGMEM;
+extern const unsigned char dateInput[] PROGMEM;
+
 #endif // POCKETMAGE_OS
 #endif
