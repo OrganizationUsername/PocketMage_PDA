@@ -5,7 +5,6 @@
 //      888        .88ooo8888.         `"Y88b  888`88b.         `"Y88b  //
 //      888       .8'     `888.  oo     .d8P  888  `88b.  oo     .d8P   //
 //     o888o     o88o      o8888o 8""88888P'  o888o  o888o 8""88888P'   //  
-// AUDIT 1
 
 #include <globals.h>
 #include "esp32-hal-log.h"
@@ -27,6 +26,10 @@ uint8_t selectedTask = 0;
 void TASKS_INIT() {
   CurrentAppState = TASKS;
   CurrentTasksState = TASKS0;
+  
+  updateTaskArray();
+  sortTasksByDueDate(tasks);
+  
   EINK().forceSlowFullUpdate(true);
   newState = true;
 }
@@ -40,8 +43,6 @@ void sortTasksByDueDate(std::vector<std::vector<String>> &tasks) {
 void updateTasksFile() {
   SDActive = true;
   pocketmage::setCpuSpeed(240);
-  // Clear the existing tasks file first
-  //PM_SDAUTO().delFile("/sys/tasks.txt");
 
   const char* tempFile = "/sys/tasks.tmp";
   const char* tasksFile = "/sys/tasks.txt";
@@ -76,7 +77,6 @@ void updateTasksFile() {
 }
 
 void addTask(String taskName, String dueDate, String priority, String completed) {
-  // Removed updateTaskArray() here - it clears the array mid-operation!
   tasks.push_back({taskName, dueDate, priority, completed});
   sortTasksByDueDate(tasks);
   updateTasksFile();
@@ -173,12 +173,10 @@ void processKB_TASKS() {
   char inchar;
 
   String input = "";
-  String prompt = "";
 
   switch (CurrentTasksState) {
     case TASKS0:
       KB().setKeyboardState(FUNC);
-      //Make keyboard only updates after cooldown
       if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {  
         inchar = KB().updateKeypress();
         //No char recieved
@@ -197,7 +195,7 @@ void processKB_TASKS() {
         }
         // SELECT A TASK
         else if (inchar >= '0' && inchar <= '9') {
-          int taskIndex = (inchar == '0') ? 10 : (inchar - '1');  // Adjust for 1-based input
+          int taskIndex = (inchar == '0') ? 9 : (inchar - '1');  
 
           // SET SELECTED TASK
           if (taskIndex < tasks.size()) {
@@ -210,7 +208,6 @@ void processKB_TASKS() {
         }
 
         currentMillis = millis();
-        //Make sure oled only updates at 60fps
         if (currentMillis - OLEDFPSMillis >= (1000/OLED_MAX_FPS)) {
           OLEDFPSMillis = currentMillis;
           OLED().oledWord(currentWord);
@@ -218,86 +215,53 @@ void processKB_TASKS() {
         KBBounceMillis = currentMillis;
       }
       break;
+
     case TASKS0_NEWTASK:
-      if (newTaskState == 1) KB().setKeyboardState(FUNC);
-
-      // Choose the current prompt
-      switch (newTaskState) {
-        case 0:
-          prompt = "Enter Task Name:";
-          break;
-        case 1:
-          prompt = "Enter Due Date: (YYYYMMDD) or (T)oday";
-          break;
-      }
-
-      input = textPrompt(prompt);
-      if (input != "_EXIT_") {           
-        // ENTER INFORMATION BASED ON STATE
-        switch (newTaskState) {
-          case 0: // ENTER TASK NAME
-            newTaskName = input;
-            newTaskState = 1;
-            break;
-          case 1: // ENTER DUE DATE
-            String testDate = "";
-            if (input == "t" || input == "T") {
-              DateTime now = CLOCK().nowDT();
-              
-              String y = String(now.year());
-              String m = (now.month() < 10 ? "0" : "") + String(now.month());
-              String d = (now.day() < 10 ? "0" : "") + String(now.day());
-              
-              input = y + m + d;
-              testDate = convertDateFormat(input);
-            }
-            else {
-              testDate = convertDateFormat(input);
-            }
-
-            // DATE IS VALID
-            if (testDate != "Invalid") {
-              newTaskDueDate = input;
-
-              // ADD NEW TASK
-              addTask(newTaskName, newTaskDueDate, "0", "0");
-              OLED().oledWord("New Task Added");
-              delay(1000);
-
-              // RETURN
-              newTaskState = 0;
-              CurrentTasksState = TASKS0;
-              newState = true;
-            }
-            // DATE IS INVALID
-            else {
-              OLED().oledWord("Invalid Date");
-              delay(1000);
-            }
-            break;
+      if (newTaskState == 0) {
+        // Step 1: Text entry for task name
+        KB().setKeyboardState(NORMAL);
+        input = textPrompt("Enter Task Name:");
+        if (input != "_EXIT_") {
+          newTaskName = input;
+          newTaskState = 1;
+        } else {
+          CurrentTasksState = TASKS0;
         }
-      } else {
+      } 
+      else if (newTaskState == 1) {
+        // Step 2: Interactive Date Prompt
+        String uiDate = datePrompt(); // Returns "DD/MM/YYYY"
+
+        // Convert "DD/MM/YYYY" to internal "YYYYMMDD" format for sorting
+        newTaskDueDate = uiDate.substring(6, 10) + uiDate.substring(3, 5) + uiDate.substring(0, 2);
+
+        // ADD NEW TASK
+        addTask(newTaskName, newTaskDueDate, "0", "0");
+        OLED().oledWord("New Task Added");
+        delay(1000);
+
+        // RETURN TO MAIN MENU
+        newTaskState = 0;
         CurrentTasksState = TASKS0;
+        newState = true;
       }
       break;
+
     case TASKS1:
       disableTimeout = false;
 
       KB().setKeyboardState(FUNC);
       currentMillis = millis();
-      //Make sure oled only updates at 60fps
       if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {  
         char inchar = KB().updateKeypress();
-        //No char recieved
+        
         if (inchar == 0);
-        //BKSP Recieved
         else if (inchar == 127 || inchar == 8 || inchar == 12) {
           CurrentTasksState = TASKS0;
           EINK().forceSlowFullUpdate(true);
           newState = true;
           break;
         }
-        // SELECT A TASK
         else if (inchar >= '1' && inchar <= '4') {
             
           if (selectedTask >= 0 && selectedTask < tasks.size()) {
@@ -315,42 +279,22 @@ void processKB_TASKS() {
                 }
               }
               else if (inchar == '2') { // CHANGE DUE DATE
-                input = textPrompt("Enter Due Date: (YYYYMMDD) or (T)oday");
+                // Call the new interactive UI
+                String uiDate = datePrompt(); 
+                
+                OLED().oledWord("updating task...");
 
-                String testDate = "";
-                if (input == "t" || input == "T") {
-                  DateTime now = CLOCK().nowDT();
-                  
-                  String y = String(now.year());
-                  String m = (now.month() < 10 ? "0" : "") + String(now.month());
-                  String d = (now.day() < 10 ? "0" : "") + String(now.day());
-                  
-                  input = y + m + d;
-                  testDate = convertDateFormat(input);
-                }
-                else {
-                  testDate = convertDateFormat(input);
-                }
+                // Convert "DD/MM/YYYY" to internal "YYYYMMDD"
+                newTaskDueDate = uiDate.substring(6, 10) + uiDate.substring(3, 5) + uiDate.substring(0, 2);
 
-                // DATE IS VALID
-                if (testDate != "Invalid") {
-                  OLED().oledWord("updating task...");
-                  newTaskDueDate = input;
+                // UPDATE DUE DATE
+                tasks[selectedTask][1] = newTaskDueDate;
+                updateTasksFile();
 
-                  // UPDATE DUE DATE
-                  tasks[selectedTask][1] = newTaskDueDate;
-                  updateTasksFile();
-
-                  // RETURN
-                  CurrentTasksState = TASKS0;
-                  EINK().forceSlowFullUpdate(true);
-                  newState = true;
-                }
-                // DATE IS INVALID
-                else {
-                  OLED().oledWord("Invalid Date");
-                  delay(1000);
-                }
+                // RETURN
+                CurrentTasksState = TASKS0;
+                EINK().forceSlowFullUpdate(true);
+                newState = true;
               }
               else if (inchar == '3') { // DELETE TASK
                 int response = boolPrompt("Delete Task?");
@@ -376,7 +320,6 @@ void processKB_TASKS() {
         }
 
         currentMillis = millis();
-        //Make sure oled only updates at 60fps
         if (currentMillis - OLEDFPSMillis >= (1000/OLED_MAX_FPS)) {
           OLEDFPSMillis = currentMillis;
           OLED().oledWord(currentWord);
@@ -384,7 +327,6 @@ void processKB_TASKS() {
         KBBounceMillis = currentMillis;
       }
       break;
-  
   }
 }
 
@@ -398,13 +340,9 @@ void einkHandler_TASKS() {
         // DRAW APP
         display.drawBitmap(0, 0, tasksApp0, 320, 218, GxEPD_BLACK);
 
-        // DRAW FILE LIST
-        updateTaskArray();
-        sortTasksByDueDate(tasks);
-
         if (!tasks.empty()) {
           ESP_LOGV(TAG, "Printing Tasks");
-          EINK().drawStatusBar("Select (0-9),New Task (N)");
+          EINK().drawStatusBar("Select (1-0),New Task (N)");
 
           int loopCount = std::min((int)tasks.size(), MAX_FILES);
           for (int i = 0; i < loopCount; i++) {
@@ -424,46 +362,45 @@ void einkHandler_TASKS() {
         EINK().refresh();
       }
       break;
-      case TASKS0_NEWTASK:
-        if (newState) {
-          newState = false;
-          EINK().resetDisplay();
+      
+    case TASKS0_NEWTASK:
+      if (newState) {
+        newState = false;
+        EINK().resetDisplay();
 
-          // DRAW APP
-          display.drawBitmap(0, 0, tasksApp0, 320, 218, GxEPD_BLACK);
+        // DRAW APP
+        display.drawBitmap(0, 0, tasksApp0, 320, 218, GxEPD_BLACK);
 
-          // DRAW FILE LIST
-          updateTaskArray();
-          sortTasksByDueDate(tasks);
+        if (!tasks.empty()) {
+          ESP_LOGV(TAG, "Printing Tasks");
 
-          if (!tasks.empty()) {
-            ESP_LOGV(TAG, "Printing Tasks");
+          int loopCount = std::min((int)tasks.size(), MAX_FILES);
+          for (int i = 0; i < loopCount; i++) {
+            display.setFont(&FreeSerif9pt7b);
+            // PRINT TASK NAME
+            display.setCursor(29, 54 + (17 * i));
+            display.print(tasks[i][0].c_str());
+            // PRINT TASK DUE DATE
+            display.setCursor(231, 54 + (17 * i));
+            display.print(convertDateFormat(tasks[i][1]).c_str());
 
-            int loopCount = std::min((int)tasks.size(), MAX_FILES);
-            for (int i = 0; i < loopCount; i++) {
-              display.setFont(&FreeSerif9pt7b);
-              // PRINT TASK NAME
-              display.setCursor(29, 54 + (17 * i));
-              display.print(tasks[i][0].c_str());
-              // PRINT TASK DUE DATE
-              display.setCursor(231, 54 + (17 * i));
-              display.print(convertDateFormat(tasks[i][1]).c_str());
-
-              ESP_LOGI("TASKS", "%s, %s", tasks[i][0].c_str(), convertDateFormat(tasks[i][1]).c_str()); 
-            }
+            ESP_LOGI("TASKS", "%s, %s", tasks[i][0].c_str(), convertDateFormat(tasks[i][1]).c_str()); 
           }
-          switch (newTaskState) {
-            case 0:
-              EINK().drawStatusBar("Enter Task Name:");
-              break;
-            case 1:
-              EINK().drawStatusBar("Due Date (YYYYMMDD):");
-              break;
-          }
-
-          EINK().refresh();
         }
-        break;
+        
+        switch (newTaskState) {
+          case 0:
+            EINK().drawStatusBar("Enter Task Name:");
+            break;
+          case 1:
+            EINK().drawStatusBar("Set Due Date on OLED");
+            break;
+        }
+
+        EINK().refresh();
+      }
+      break;
+      
     case TASKS1:
       if (newState) {
         newState = false;
@@ -476,7 +413,6 @@ void einkHandler_TASKS() {
         EINK().refresh();
       }
       break;
-    
   }
 }
 #endif
