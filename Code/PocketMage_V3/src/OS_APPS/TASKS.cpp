@@ -280,7 +280,7 @@ void processKB_TASKS() {
               }
               else if (inchar == '2') { // CHANGE DUE DATE
                 // Call the new interactive UI
-                String uiDate = datePrompt(); 
+                String uiDate = datePrompt(tasks[selectedTask][1]);
                 
                 OLED().oledWord("updating task...");
 
