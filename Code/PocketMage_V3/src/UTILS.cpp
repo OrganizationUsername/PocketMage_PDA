@@ -293,6 +293,7 @@ void updateBattState() {
   prevVoltage = filteredVoltage;
 }
 
+#pragma region Basic Inputs
 // Prompt the user for text input, return the text
 String textPrompt(String promptText, String prefix) {
   String currentLine = "";
@@ -492,6 +493,165 @@ int boolPrompt(String promptText) {
     yield();
   }
 }
+
+int timePrompt() {
+  uint8_t digits[4] = {0,0,0,0};
+  ulong currentIndex = 0;
+
+  for (;;) {
+    #if !OTA_APP 
+      if (!noTimeout)  checkTimeout();
+      if (DEBUG_VERBOSE) printDebug();
+    #endif
+
+    // Update scroll
+    int scrollVec = TOUCH().getScrollVector();
+    if (scrollVec != 0) {
+      
+      // Convert current digits to total minutes
+      int total_mins = (digits[0] * 10 + digits[1]) * 60 + (digits[2] * 10 + digits[3]);
+
+      // Apply the scroll vector based on cursor position
+      switch (currentIndex) {
+        case 0: total_mins += scrollVec * 600; break; // +/- 10 hours
+        case 1: total_mins += scrollVec * 60;  break; // +/- 1 hour
+        case 2: total_mins += scrollVec * 10;  break; // +/- 10 minutes
+        case 3: total_mins += scrollVec * 1;   break; // +/- 1 minute
+      }
+
+      // Wrap-around logic for 24-hour format (1440 minutes in a day)
+      total_mins = total_mins % 1440;
+      if (total_mins < 0) {
+          total_mins += 1440; // Wrap backwards (e.g. 00:00 - 1 min = 23:59)
+      }
+
+      // Convert total minutes back to individual digits
+      int h = total_mins / 60;
+      int m = total_mins % 60;
+      
+      digits[0] = h / 10;
+      digits[1] = h % 10;
+      digits[2] = m / 10;
+      digits[3] = m % 10;
+    }
+    
+    // Update system state
+    updateBattState();
+    KB().checkUSBKB();
+
+    // Handle keyboard inputs
+    KB().setKeyboardState(FUNC);
+    char inchar = KB().updateKeypress();
+
+    // Left arrow
+    if (inchar == 12) {
+      if (currentIndex > 0) {
+        currentIndex--;
+      } 
+    }
+
+    // Right arrow
+    else if (inchar == 6) {
+      if (currentIndex < 3) {
+        currentIndex++;
+      }
+    }
+
+    // Direct Numeric Entry (0-9)
+    else if (inchar >= '0' && inchar <= '9') {
+      int val = inchar - '0'; // Convert ASCII char to integer
+      
+      switch (currentIndex) {
+        case 0: // Tens of Hours (Max 2)
+          digits[0] = (val > 2) ? 2 : val;
+          // Reverse Clamp: If we just set it to 2, ensure the hours digit isn't sitting at 4-9
+          if (digits[0] == 2 && digits[1] > 3) {
+             digits[1] = 3; 
+          }
+          break;
+          
+        case 1: // Hours (Max 3 if Tens is 2, otherwise Max 9)
+          if (digits[0] == 2) {
+            digits[1] = (val > 3) ? 3 : val;
+          } else {
+            digits[1] = val;
+          }
+          break;
+          
+        case 2: // Tens of Minutes (Max 5)
+          digits[2] = (val > 5) ? 5 : val;
+          break;
+          
+        case 3: // Minutes (Max 9)
+          digits[3] = val;
+          break;
+      }
+      
+      // Auto-advance cursor for natural typing flow
+      if (currentIndex < 3) {
+        currentIndex++;
+      }
+    }
+
+    // Enter 
+    else if (inchar == 13) {
+      int returnInt = 0;
+      returnInt += digits[3]*1;
+      returnInt += digits[2]*10;
+      returnInt += digits[1]*100;
+      returnInt += digits[0]*1000;
+
+      // Because of our modulo math and strict clamping, the digits can 
+      // physically never exceed 23:59. But we clamp just in case.
+      if (returnInt >= 2400) {
+          returnInt = 0;
+      }
+
+      return returnInt;
+    }
+
+    // Draw interface
+    u8g2.clearBuffer(); // Required so text doesn't smear endlessly
+
+    // Draw background
+    u8g2.drawXBMP(0,0,256,32,timeInput);
+
+    // Draw indicator
+    switch (currentIndex) {
+      case 0:
+        u8g2.drawXBMP(89,21,24,11,leftRightIndicator0);
+        break;
+      case 1:
+        u8g2.drawXBMP(106,21,24,11,leftRightIndicator1);
+        break;
+      case 2:
+        u8g2.drawXBMP(127,21,24,11,leftRightIndicator1);
+        break;
+      case 3:
+        u8g2.drawXBMP(144,21,24,11,leftRightIndicator2);
+        break;
+    }
+
+    // Draw digits
+    u8g2.setFont(u8g2_font_7x13B_tf);
+    // Digit 0
+    u8g2.drawStr(94,16,String(digits[0]).c_str());
+    // Digit 1
+    u8g2.drawStr(111,16,String(digits[1]).c_str());
+    // Digit 2
+    u8g2.drawStr(132,16,String(digits[2]).c_str());
+    // Digit 3
+    u8g2.drawStr(149,16,String(digits[3]).c_str());
+
+    u8g2.sendBuffer(); // Required to push the frame to the OLED
+
+    vTaskDelay(pdMS_TO_TICKS(10));
+    yield();
+  }
+}
+
+
+
 
 void waitForKeypress(String message) {
   KB().setKeyboardState(NORMAL); 

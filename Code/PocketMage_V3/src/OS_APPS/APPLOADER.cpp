@@ -96,7 +96,6 @@ void copyDirRecursive(File src, const String &assetsSrc, const String &assetsDst
         }
         entry.close();
         
-        // FIX 2: Feed the watchdog timer during large asset copies
         vTaskDelay(1); 
     }
 }
@@ -261,7 +260,6 @@ bool cleanupAppsTempRecursive(fs::FS &fs, const String &dirPath) {
 
 // ---------- Install Task ----------
 
-// FIX 1: Provide a deep-copy buffer so the RTOS task doesn't read dead memory
 struct InstallTaskParams {
     char tarRelName[128];
     int otaIndex; // 1..4

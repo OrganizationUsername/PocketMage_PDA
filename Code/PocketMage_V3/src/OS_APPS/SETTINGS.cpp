@@ -22,7 +22,6 @@ String settingCommandSelect(String command) {
   if (command.startsWith("timeset ") || command.startsWith("settime ")) {
     String timePart = command.substring(8);
     timePart.trim();
-    // FIX 2: Validate time string length before pushing to RTC
     if (timePart.length() >= 4) { 
       CLOCK().setTimeFromString(timePart);
       returnText = "Time Updated";
@@ -217,7 +216,6 @@ void einkHandler_settings() {
   if (newState) {
     newState = false;
 
-    // FIX 1 & 3: Stop NVS querying, use valid hardware reset
     EINK().resetDisplay();
     display.drawBitmap(0, 0, _settings, 320, 218, GxEPD_BLACK);
 

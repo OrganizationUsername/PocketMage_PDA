@@ -11,7 +11,6 @@ static constexpr const char* TAG = "USB";
 static USBMSC msc;
 static sdmmc_card_t* card = nullptr;     // SD card pointer
 
-// FIX 3: Prevent race conditions between user input and background USB interrupts
 static volatile bool usb_is_shutting_down = false;
 
 void USBAppShutdown() {
@@ -20,7 +19,6 @@ void USBAppShutdown() {
   usb_is_shutting_down = true;
   ESP_LOGI(TAG, "Shutting down USB MSC...");
 
-  // FIX 1: Notify host media removal and give it time to flush caches safely
   msc.mediaPresent(false);
   delay(500); 
 
@@ -38,7 +36,6 @@ void USBAppShutdown() {
 
   mscEnabled = false;
 
-  // FIX 4: Removed the redundant SD_MMC.begin() logic here. 
   // The system is about to esp_restart(), so remounting the SD card 
   // right before a hardware reboot is dangerous and unnecessary.
 
@@ -152,7 +149,7 @@ void USB_INIT() {
   err = sdmmc_host_init_slot(SDMMC_HOST_SLOT_1, &slot_config);
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "Slot init failed: %s\n", esp_err_to_name(err));
-    sdmmc_host_deinit(); // FIX 2: Hardware release on fail
+    sdmmc_host_deinit();
     return;
   }
 
@@ -160,7 +157,7 @@ void USB_INIT() {
   card = (sdmmc_card_t*)malloc(sizeof(sdmmc_card_t));
   if (!card) {
     ESP_LOGE(TAG, "Failed to allocate card struct\n", esp_err_to_name(err));
-    sdmmc_host_deinit(); // FIX 2: Hardware release on fail
+    sdmmc_host_deinit();
     return;
   }
 
@@ -169,7 +166,7 @@ void USB_INIT() {
     ESP_LOGE(TAG, "Card init failed: %s\n", esp_err_to_name(err));
     free(card);
     card = nullptr;
-    sdmmc_host_deinit(); // FIX 2: Hardware release on fail
+    sdmmc_host_deinit();
     return;
   }
 

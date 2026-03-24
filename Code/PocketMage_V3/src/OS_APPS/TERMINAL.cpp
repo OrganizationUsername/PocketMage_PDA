@@ -189,7 +189,6 @@ void updateTerminalDisp() {
   EINK().refresh();
 }
 
-// FIX 2: Added proper recursive deletion helper function
 bool deleteRecursive(String path) {
   File dir = global_fs->open(path);
   if (!dir) return false;
@@ -769,7 +768,6 @@ void funcSelect(String command) {
         } 
         else {
           // Compile and run with Wrench
-          // FIX 1: Explicitly check for nullptr to prevent strlen() panics, and free memory.
           const char* wrenchCode = readCFile(filePath);
           if (wrenchCode) {
             compileWrench(wrenchCode);

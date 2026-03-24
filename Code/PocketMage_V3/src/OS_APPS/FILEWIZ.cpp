@@ -17,7 +17,6 @@ String currentWord = "";
 static String currentLine = "";
 bool refreshFiles = false;
 
-// FIX 2: Max files to load in memory to prevent OOM Panics
 #define MAX_CACHED_FILES 200 
 
 std::vector<String> excludedPaths = {
@@ -99,10 +98,8 @@ String renderWizMini(String folder, int8_t scrollDelta) {
     File dir = global_fs->open(folder);
     if (dir && dir.isDirectory()) {
       File entry;
-      // FIX 2: Apply the hardcap limit to protect Heap RAM
       while ((entry = dir.openNextFile()) && cachedFiles.size() < MAX_CACHED_FILES) {
         
-        // FIX 3: Safely construct path without double-slashes
         String fullPath = folder;
         if (!fullPath.endsWith("/")) fullPath += "/";
         
@@ -285,7 +282,6 @@ String fileWizardMini(bool allowRecentSelect, String rootDir, char inchar_) {
       if (selectedPath != "") {
         File entry = global_fs->open(selectedPath);
         if (entry) {
-          // FIX 1: Read properties and immediately close to stop VFS leakage
           bool isDirectory = entry.isDirectory();
           entry.close();
 

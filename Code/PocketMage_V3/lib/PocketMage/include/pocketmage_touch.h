@@ -27,6 +27,7 @@ public:
   int getLastTouch() const { return lastTouch_; }
   int getLastTouchTime() const { return lastTouchTime_; }
   int getDiff() const { return dynamicScroll_ - prev_dynamicScroll_; }
+  int getScrollVector();
 private:
   Adafruit_MPR121      &cap_;                          // class reference to hardware touch object
   volatile long int dynamicScroll_ = 0;         // Dynamic scroll offset

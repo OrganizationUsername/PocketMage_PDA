@@ -25,7 +25,6 @@ static PocketmageSDSPI pm_sdspi;
 static PocketmageSDAUTO pm_sdauto;
 
 // Helpers
-// FIX 1: Read chunk-by-chunk directly from filesystem to prevent OOM panics on large files
 static int countVisibleCharsFile(fs::FS &fs, const char* path) {
   File f = fs.open(path, "r");
   if (!f || f.isDirectory()) return 0;
