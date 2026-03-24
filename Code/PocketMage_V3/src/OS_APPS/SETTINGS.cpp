@@ -19,22 +19,64 @@ String settingCommandSelect(String command) {
   String returnText = "";
   command.toLowerCase();
 
-  if (command.startsWith("timeset ") || command.startsWith("settime ")) {
-    String timePart = command.substring(8);
-    timePart.trim();
-    // FIX 2: Validate time string length before pushing to RTC
-    if (timePart.length() >= 4) { 
+  if (command.startsWith("timeset") || command.startsWith("settime")) {
+    String timePart = "";
+    
+    // Extract the argument if there is a space
+    int spaceIdx = command.indexOf(' ');
+    if (spaceIdx != -1) {
+      timePart = command.substring(spaceIdx + 1);
+      timePart.trim();
+    }
+
+    // If no argument was provided, launch the interactive UI
+    if (timePart.length() == 0) {
+      int newTime = timePrompt(); // Returns integer like 1430 or 5
+      
+      // Format the integer back into a safe, padded string (e.g., "00:05" or "14:30")
+      char timeBuf[6];
+      snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", newTime / 100, newTime % 100);
+      
+      CLOCK().setTimeFromString(String(timeBuf));
+      returnText = "Time Updated to " + String(timeBuf);
+    } 
+    // If a manual argument was provided, validate and parse it directly
+    else if (timePart.length() >= 4) { 
       CLOCK().setTimeFromString(timePart);
       returnText = "Time Updated";
-    } else {
+    } 
+    else {
       returnText = "Invalid Format (HH:MM)";
     }
+    
     return returnText;
   }
-  else if (command.startsWith("dateset ") || command.startsWith("setdate ")) {
-    String datePart = command.substring(8);
-    datePart.trim();
-    if (datePart.length() == 8 && datePart.toInt() > 0) {
+  else if (command.startsWith("dateset") || command.startsWith("setdate")) {
+    String datePart = "";
+    
+    // Extract the argument if there is a space
+    int spaceIdx = command.indexOf(' ');
+    if (spaceIdx != -1) {
+      datePart = command.substring(spaceIdx + 1);
+      datePart.trim();
+    }
+
+    // If no argument was provided, launch the interactive UI
+    if (datePart.length() == 0) {
+      String newDate = datePrompt(); // Returns formatted "DD/MM/YYYY"
+
+      // Parse the returned string into integers
+      int day   = newDate.substring(0, 2).toInt();
+      int month = newDate.substring(3, 5).toInt();
+      int year  = newDate.substring(6, 10).toInt();
+
+      DateTime now = CLOCK().nowDT();  // Preserve current time
+      CLOCK().getRTC().adjust(DateTime(year, month, day, now.hour(), now.minute(), now.second()));
+      
+      returnText = "Date Updated to " + newDate;
+    }
+    // If a manual argument was provided, validate and parse it directly
+    else if (datePart.length() == 8 && datePart.toInt() > 0) {
       int year  = datePart.substring(0, 4).toInt();
       int month = datePart.substring(4, 6).toInt();
       int day   = datePart.substring(6, 8).toInt();
@@ -45,6 +87,7 @@ String settingCommandSelect(String command) {
     } else {
       returnText = "Invalid format (YYYYMMDD)";
     }
+    
     return returnText;
   }
   else if (command.startsWith("lumina ")) {
@@ -217,7 +260,6 @@ void einkHandler_settings() {
   if (newState) {
     newState = false;
 
-    // FIX 1 & 3: Stop NVS querying, use valid hardware reset
     EINK().resetDisplay();
     display.drawBitmap(0, 0, _settings, 320, 218, GxEPD_BLACK);
 

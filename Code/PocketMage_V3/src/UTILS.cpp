@@ -293,6 +293,7 @@ void updateBattState() {
   prevVoltage = filteredVoltage;
 }
 
+#pragma region Basic Inputs
 // Prompt the user for text input, return the text
 String textPrompt(String promptText, String prefix) {
   String currentLine = "";
@@ -487,6 +488,393 @@ int boolPrompt(String promptText) {
         return 0;
       }
     }
+
+    vTaskDelay(pdMS_TO_TICKS(10));
+    yield();
+  }
+}
+
+int timePrompt(int defaultTime) {
+  uint8_t digits[4] = {0,0,0,0};
+  ulong currentIndex = 0;
+
+  // If a valid time is passed (e.g., 1430), extract it into the digits array
+  if (defaultTime >= 0 && defaultTime <= 2359) {
+    digits[0] = (defaultTime / 1000) % 10;
+    digits[1] = (defaultTime / 100) % 10;
+    digits[2] = (defaultTime / 10) % 10;
+    digits[3] = defaultTime % 10;
+  }
+
+  // X coordinates for the 4 digits (HHMM)
+  const int tX[4] = {93, 110, 131, 148};
+
+  for (;;) {
+    #if !OTA_APP 
+      if (!noTimeout)  checkTimeout();
+      if (DEBUG_VERBOSE) printDebug();
+    #endif
+
+    // Update scroll
+    int scrollVec = TOUCH().getScrollVector();
+    if (scrollVec != 0) {
+      
+      if (currentIndex == 0) {
+        // Isolate the Tens of Hours digit to prevent base-24 modulo bleeding
+        int d0 = digits[0] + scrollVec;
+        if (d0 > 2) d0 = 0;
+        if (d0 < 0) d0 = 2;
+        digits[0] = d0;
+        
+        // Reverse Clamp: If we wrapped to 2, ensure the hours digit isn't sitting at 4-9
+        if (digits[0] == 2 && digits[1] > 3) {
+           digits[1] = 3; 
+        }
+      } else {
+        // Convert current digits to total minutes for smooth carry-over
+        int total_mins = (digits[0] * 10 + digits[1]) * 60 + (digits[2] * 10 + digits[3]);
+
+        // Apply the scroll vector based on cursor position
+        switch (currentIndex) {
+          case 1: total_mins += scrollVec * 60;  break; // +/- 1 hour
+          case 2: total_mins += scrollVec * 10;  break; // +/- 10 minutes
+          case 3: total_mins += scrollVec * 1;   break; // +/- 1 minute
+        }
+
+        // Wrap-around logic for 24-hour format (1440 minutes in a day)
+        total_mins = total_mins % 1440;
+        if (total_mins < 0) {
+            total_mins += 1440; // Wrap backwards (e.g. 00:00 - 1 min = 23:59)
+        }
+
+        // Convert total minutes back to individual digits
+        int h = total_mins / 60;
+        int m = total_mins % 60;
+        
+        digits[0] = h / 10;
+        digits[1] = h % 10;
+        digits[2] = m / 10;
+        digits[3] = m % 10;
+      }
+    }
+    
+    // Update system state
+    updateBattState();
+    KB().checkUSBKB();
+
+    // Handle keyboard inputs
+    KB().setKeyboardState(FUNC);
+    char inchar = KB().updateKeypress();
+
+    // Left arrow or bksp
+    if (inchar == 12 || inchar == 8) {
+      if (currentIndex > 0) {
+        currentIndex--;
+      } 
+    }
+
+    // Right arrow
+    else if (inchar == 6) {
+      if (currentIndex < 3) {
+        currentIndex++;
+      }
+    }
+
+    // Direct Numeric Entry (0-9)
+    else if (inchar >= '0' && inchar <= '9') {
+      int val = inchar - '0'; // Convert ASCII char to integer
+      
+      switch (currentIndex) {
+        case 0: // Tens of Hours (Max 2)
+          digits[0] = (val > 2) ? 2 : val;
+          // Reverse Clamp: If we just set it to 2, ensure the hours digit isn't sitting at 4-9
+          if (digits[0] == 2 && digits[1] > 3) {
+             digits[1] = 3; 
+          }
+          break;
+          
+        case 1: // Hours (Max 3 if Tens is 2, otherwise Max 9)
+          if (digits[0] == 2) {
+            digits[1] = (val > 3) ? 3 : val;
+          } else {
+            digits[1] = val;
+          }
+          break;
+          
+        case 2: // Tens of Minutes (Max 5)
+          digits[2] = (val > 5) ? 5 : val;
+          break;
+          
+        case 3: // Minutes (Max 9)
+          digits[3] = val;
+          break;
+      }
+      
+      // Auto-advance cursor for natural typing flow
+      if (currentIndex < 3) {
+        currentIndex++;
+      }
+    }
+
+    // Enter 
+    else if (inchar == 13) {
+      int returnInt = 0;
+      returnInt += digits[3]*1;
+      returnInt += digits[2]*10;
+      returnInt += digits[1]*100;
+      returnInt += digits[0]*1000;
+
+      // Because of our modulo math and strict clamping, the digits can 
+      // physically never exceed 23:59. But we clamp just in case.
+      if (returnInt >= 2400) {
+          returnInt = 0;
+      }
+
+      return returnInt;
+    }
+
+    // Draw interface
+    u8g2.clearBuffer(); // Required so text doesn't smear endlessly
+
+    // Draw background
+    u8g2.drawXBMP(0,0,256,32,timeInput);
+
+    // Draw indicator
+    switch (currentIndex) {
+      case 0:
+        u8g2.drawXBMP(89,21,24,11,leftRightIndicator0);
+        break;
+      case 1:
+        u8g2.drawXBMP(106,21,24,11,leftRightIndicator1);
+        break;
+      case 2:
+        u8g2.drawXBMP(127,21,24,11,leftRightIndicator1);
+        break;
+      case 3:
+        u8g2.drawXBMP(144,21,24,11,leftRightIndicator2);
+        break;
+    }
+
+    // Draw digits dynamically with inverted active block
+    u8g2.setFont(u8g2_font_luBIS14_tn);
+    for (int i = 0; i < 4; i++) {
+      if (i == currentIndex) {
+        u8g2.setDrawColor(1);
+        u8g2.drawBox(tX[i], 0, 15, 20); // Draw white background block
+        u8g2.setDrawColor(0);               // Set text color to black
+      } else {
+        u8g2.setDrawColor(1);               // Standard white text
+      }
+      u8g2.drawStr(tX[i], 16, String(digits[i]).c_str());
+    }
+    u8g2.setDrawColor(1); // Reset for next draw cycle
+
+    u8g2.sendBuffer(); // Required to push the frame to the OLED
+
+    vTaskDelay(pdMS_TO_TICKS(10));
+    yield();
+  }
+}
+
+// Helper function to calculate max days in a month (handles Leap Years)
+static int getDaysInMonth(int month, int year) {
+  if (month == 2) {
+    return ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0) ? 29 : 28;
+  }
+  if (month == 4 || month == 6 || month == 9 || month == 11) return 30;
+  return 31;
+}
+
+String datePrompt(String defaultYYYYMMDD) {
+  uint8_t digits[8] = {0,0,0,0,0,0,0,0};
+  ulong currentIndex = 0;
+  
+  int d, m, y;
+  
+  if (defaultYYYYMMDD.length() == 8) {
+    y = defaultYYYYMMDD.substring(0, 4).toInt();
+    m = defaultYYYYMMDD.substring(4, 6).toInt();
+    d = defaultYYYYMMDD.substring(6, 8).toInt();
+  } else {
+    DateTime now = CLOCK().nowDT();
+    y = now.year();
+    m = now.month();
+    d = now.day();
+  }
+
+  digits[0] = d / 10;
+  digits[1] = d % 10;
+  digits[2] = m / 10;
+  digits[3] = m % 10;
+  digits[4] = y / 1000;
+  digits[5] = (y / 100) % 10;
+  digits[6] = (y / 10) % 10;
+  digits[7] = y % 10;
+
+  const int dX[8] = {57, 74, 96, 113, 135, 152, 168, 185};
+
+  for (;;) {
+    #if !OTA_APP 
+      if (!noTimeout)  checkTimeout();
+      if (DEBUG_VERBOSE) printDebug();
+    #endif
+
+    int scrollVec = TOUCH().getScrollVector();
+    if (scrollVec != 0) {
+      
+      int d = digits[0] * 10 + digits[1];
+      int m = digits[2] * 10 + digits[3];
+      int y = digits[4] * 1000 + digits[5] * 100 + digits[6] * 10 + digits[7];
+
+      if (d == 0) d = 1;
+      if (m == 0) m = 1;
+
+      if (currentIndex == 0) {
+        int d_tens = digits[0] + scrollVec;
+        if (d_tens > 3) d_tens = 0;
+        if (d_tens < 0) d_tens = 3;
+        
+        d = d_tens * 10 + digits[1];
+        int maxDays = getDaysInMonth(m, y);
+        if (d > maxDays) d = maxDays;
+        if (d == 0) d = 1;
+      } 
+      else if (currentIndex == 1) {
+        d += scrollVec;
+        while (d > getDaysInMonth(m, y)) {
+          d -= getDaysInMonth(m, y);
+          m++;
+          if (m > 12) { m = 1; y++; }
+        }
+        while (d < 1) {
+          m--;
+          if (m < 1) { m = 12; y--; }
+          d += getDaysInMonth(m, y);
+        }
+      }
+      else if (currentIndex == 2) {
+        int m_tens = digits[2] + scrollVec;
+        if (m_tens > 1) m_tens = 0;
+        if (m_tens < 0) m_tens = 1;
+        
+        m = m_tens * 10 + digits[3];
+        if (m > 12) m = 12;
+        if (m == 0) m = 1;
+        
+        int maxDays = getDaysInMonth(m, y);
+        if (d > maxDays) d = maxDays;
+      }
+      else if (currentIndex == 3) {
+        m += scrollVec;
+        while (m > 12) { m -= 12; y++; }
+        while (m < 1) { m += 12; y--; }
+        
+        int maxDays = getDaysInMonth(m, y);
+        if (d > maxDays) d = maxDays;
+      }
+      else {
+        if (currentIndex == 4) y += scrollVec * 1000;
+        if (currentIndex == 5) y += scrollVec * 100;
+        if (currentIndex == 6) y += scrollVec * 10;
+        if (currentIndex == 7) y += scrollVec * 1;
+        
+        if (y < 2000) y = 2000;
+        if (y > 2199) y = 2199;
+        
+        int maxDays = getDaysInMonth(m, y);
+        if (d > maxDays) d = maxDays;
+      }
+
+      digits[0] = d / 10;
+      digits[1] = d % 10;
+      digits[2] = m / 10;
+      digits[3] = m % 10;
+      digits[4] = y / 1000;
+      digits[5] = (y / 100) % 10;
+      digits[6] = (y / 10) % 10;
+      digits[7] = y % 10;
+    }
+    
+    updateBattState();
+    KB().checkUSBKB();
+
+    KB().setKeyboardState(FUNC);
+    char inchar = KB().updateKeypress();
+
+    if (inchar == 9 || inchar == 14) {
+      DateTime now = CLOCK().nowDT();
+      char dateBuf[11];
+      snprintf(dateBuf, sizeof(dateBuf), "%02d/%02d/%04d", 
+               now.day(), now.month(), now.year());
+      return String(dateBuf);
+    }
+    else if (inchar == 12 || inchar == 8) {
+      if (currentIndex > 0) currentIndex--;
+    }
+    else if (inchar == 6) {
+      if (currentIndex < 7) currentIndex++;
+    }
+    else if (inchar >= '0' && inchar <= '9') {
+      int val = inchar - '0';
+      digits[currentIndex] = val;
+
+      int d = digits[0] * 10 + digits[1];
+      int m = digits[2] * 10 + digits[3];
+      int y = digits[4] * 1000 + digits[5] * 100 + digits[6] * 10 + digits[7];
+
+      if (m > 12) m = 12;
+      if (currentIndex > 1 && m == 0) m = 1; 
+
+      int maxDays = getDaysInMonth(m == 0 ? 1 : m, y); 
+      if (d > maxDays) d = maxDays;
+      if (currentIndex <= 1 && d == 0 && currentIndex == 1) d = 1; 
+
+      digits[0] = d / 10;
+      digits[1] = d % 10;
+      digits[2] = m / 10;
+      digits[3] = m % 10;
+      digits[4] = y / 1000;
+      digits[5] = (y / 100) % 10;
+      digits[6] = (y / 10) % 10;
+      digits[7] = y % 10;
+
+      if (currentIndex < 7) currentIndex++;
+    }
+    else if (inchar == 13) {
+      char dateBuf[11];
+      snprintf(dateBuf, sizeof(dateBuf), "%02d/%02d/%04d", 
+               digits[0]*10 + digits[1], 
+               digits[2]*10 + digits[3], 
+               digits[4]*1000 + digits[5]*100 + digits[6]*10 + digits[7]);
+      
+      return String(dateBuf);
+    }
+
+    u8g2.clearBuffer();
+
+    u8g2.drawXBMP(0, 0, 256, 32, dateInput);
+
+    const uint8_t* ind = leftRightIndicator1; 
+    if (currentIndex == 0) ind = leftRightIndicator0;       
+    else if (currentIndex == 7) ind = leftRightIndicator2;  
+    
+    u8g2.drawXBMP(dX[currentIndex] - 4, 21, 24, 11, ind);
+
+    // Draw digits dynamically with inverted active block
+    u8g2.setFont(u8g2_font_luBIS14_tn);
+    for (int i = 0; i < 8; i++) {
+      if (i == currentIndex) {
+        u8g2.setDrawColor(1);
+        u8g2.drawBox(dX[i], 0, 15, 20); // Draw white background block
+        u8g2.setDrawColor(0);               // Set text color to black
+      } else {
+        u8g2.setDrawColor(1);               // Standard white text
+      }
+      u8g2.drawStr(dX[i], 16, String(digits[i]).c_str());
+    }
+    u8g2.setDrawColor(1); // Reset for next draw cycle
+
+    u8g2.sendBuffer(); 
 
     vTaskDelay(pdMS_TO_TICKS(10));
     yield();

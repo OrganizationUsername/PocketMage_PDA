@@ -129,10 +129,10 @@ void loadDefinitions(String input) {
 
   word.toLowerCase();
 
-  int lineScanCount = 0; // FIX 2: Used to pet the Watchdog
+  int lineScanCount = 0;
 
   while (file.available()) {
-    // FIX 2: Feed the Watchdog Timer to prevent reboot loops on huge dictionary files
+
     if (++lineScanCount % 100 == 0) yield(); 
 
     String line = file.readStringUntil('\n');
@@ -166,7 +166,7 @@ void loadDefinitions(String input) {
     OLED().oledWord("No definitions found");
     delay(2000);
     
-    // FIX 1: Safely return to MENU state so empty defList isn't drawn by DEF state
+
     CurrentLexState = MENU; 
     newState = true;
 
@@ -359,7 +359,7 @@ void einkHandler_LEXICON() {
       if (newState) {
         newState = false;
         
-        // FIX 3: Clear the e-ink buffer properly before drawing the UI
+
         EINK().resetDisplay(); 
 
         display.drawBitmap(0, 0, _lex1, 320, 218, GxEPD_BLACK);

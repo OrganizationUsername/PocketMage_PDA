@@ -2186,6 +2186,7 @@ void TXT_INIT(String inPath) {
     CurrentTXTState_NEW = LOAD_FILE;
     updateScreen = true;
   }
+  KB().setKeyboardState(NORMAL);
   
 }
 
@@ -2201,6 +2202,7 @@ void TXT_INIT_JournalMode() {
   updateScreen = true;
   CurrentAppState = TXT;
   CurrentTXTState_NEW = JOURNAL_MODE;
+  KB().setKeyboardState(NORMAL);
 }
 
 #pragma region Loops

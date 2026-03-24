@@ -118,7 +118,6 @@ void deepSleep(bool alternateScreenSaver) {
       String path = "/assets/backgrounds/" + binFiles[fileIndex];
       File f = global_fs->open(path);
       if (f) {
-        // FIX 3: Dynamic Heap Allocation to prevent .bss permanent RAM loss
         size_t fSize = f.size();
         uint8_t* buf = (uint8_t*)malloc(fSize);
         
@@ -248,7 +247,6 @@ void hardReset(void* parameter) {
       heldSince = millis(); // Reset so it doesn't constantly trigger
     }
     
-    // FIX 1: Feed the RTOS scheduler to prevent Watchdog Timeout panic
     vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
@@ -310,7 +308,6 @@ void PocketMage_INIT() {
   }
 
   // Start hardreset task
-  // FIX 2 & 4: Prevent E-ink task overwrite and increase stack size
   xTaskCreatePinnedToCore(pocketmage::hardReset,    // Function name
                           "hardReset",              // Task name
                           2048,                     // Stack size

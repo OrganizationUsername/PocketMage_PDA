@@ -189,7 +189,6 @@ void updateTerminalDisp() {
   EINK().refresh();
 }
 
-// FIX 2: Added proper recursive deletion helper function
 bool deleteRecursive(String path) {
   File dir = global_fs->open(path);
   if (!dir) return false;
@@ -694,23 +693,30 @@ void funcSelect(String command) {
     if (arg.length() == 0) {
       returnText = "Usage: potion <filename>";
     } else {
-      // Ensure .txt extension or add it
-      if (!arg.endsWith(".c")) {
-        // Check if there's an extension at all
+      // Compute full path first
+      String filePath =
+          arg.startsWith("/") ? arg : (currentDir + (currentDir.endsWith("/") ? "" : "/") + arg);
+
+      // Ensure .c or .txt extension
+      if (!filePath.endsWith(".c") && !filePath.endsWith(".txt")) {
+        // Check if there's an extension at all in the argument provided
         int dotIdx = arg.lastIndexOf('.');
         if (dotIdx != -1) {
-          returnText = "Only .c files supported";
+          returnText = "Only .c and .txt files supported";
         } else {
-          // Append .txt automatically
-          arg += ".c";
+          // No extension given. Auto-detect based on what exists.
+          bool hasC = global_fs->exists(filePath + ".c");
+          bool hasTxt = global_fs->exists(filePath + ".txt");
+
+          if (hasTxt && !hasC) {
+            filePath += ".txt";
+          } else {
+            filePath += ".c"; // Default to .c fallback
+          }
         }
       }
 
       if (returnText == "") {
-        // Compute full path
-        String filePath =
-            arg.startsWith("/") ? arg : (currentDir + (currentDir.endsWith("/") ? "" : "/") + arg);
-
         // Verify that file exists
         if (!global_fs->exists(filePath)) {
           returnText = "File not found";
@@ -769,7 +775,6 @@ void funcSelect(String command) {
         } 
         else {
           // Compile and run with Wrench
-          // FIX 1: Explicitly check for nullptr to prevent strlen() panics, and free memory.
           const char* wrenchCode = readCFile(filePath);
           if (wrenchCode) {
             compileWrench(wrenchCode);

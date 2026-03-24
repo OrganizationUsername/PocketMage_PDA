@@ -95,7 +95,6 @@ PocketmageCLOCK::TimeParseResult PocketmageCLOCK::parseTimeString(const String& 
     if (mStr.length() != 2 || hStr.length() < 1 || hStr.length() > 2)
       return TIME_INVALID_FORMAT;
 
-    // FIX 1: Verify string is actually numbers before toInt() returns a silent 0
     if (!isNumeric(hStr) || !isNumeric(mStr)) 
       return TIME_INVALID_FORMAT;
 
@@ -143,7 +142,6 @@ void PocketmageCLOCK::setTimeFromString(String timeStr) {
     return;
   }
 
-  // FIX 2: Use internal hardware reference (rtc_) instead of global object call
   DateTime now = rtc_.now();
   rtc_.adjust(DateTime(now.year(), now.month(), now.day(), hours, minutes, 0));
 
