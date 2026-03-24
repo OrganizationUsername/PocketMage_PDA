@@ -494,10 +494,18 @@ int boolPrompt(String promptText) {
   }
 }
 
-int timePrompt() {
+int timePrompt(int defaultTime) {
   uint8_t digits[4] = {0,0,0,0};
   ulong currentIndex = 0;
 
+  // If a valid time is passed (e.g., 1430), extract it into the digits array
+  if (defaultTime >= 0 && defaultTime <= 2359) {
+    digits[0] = (defaultTime / 1000) % 10;
+    digits[1] = (defaultTime / 100) % 10;
+    digits[2] = (defaultTime / 10) % 10;
+    digits[3] = defaultTime % 10;
+  }
+  
   for (;;) {
     #if !OTA_APP 
       if (!noTimeout)  checkTimeout();
@@ -671,20 +679,32 @@ static int getDaysInMonth(int month, int year) {
   return 31;
 }
 
-String datePrompt() {
+String datePrompt(String defaultYYYYMMDD) {
   uint8_t digits[8] = {0,0,0,0,0,0,0,0};
   ulong currentIndex = 0;
   
-  // Initialize with current date for better UX
-  DateTime now = CLOCK().nowDT();
-  digits[0] = now.day() / 10;
-  digits[1] = now.day() % 10;
-  digits[2] = now.month() / 10;
-  digits[3] = now.month() % 10;
-  digits[4] = now.year() / 1000;
-  digits[5] = (now.year() / 100) % 10;
-  digits[6] = (now.year() / 10) % 10;
-  digits[7] = now.year() % 10;
+  int d, m, y;
+  
+  // If a valid YYYYMMDD string is passed, use it. Otherwise, default to RTC today.
+  if (defaultYYYYMMDD.length() == 8) {
+    y = defaultYYYYMMDD.substring(0, 4).toInt();
+    m = defaultYYYYMMDD.substring(4, 6).toInt();
+    d = defaultYYYYMMDD.substring(6, 8).toInt();
+  } else {
+    DateTime now = CLOCK().nowDT();
+    y = now.year();
+    m = now.month();
+    d = now.day();
+  }
+
+  digits[0] = d / 10;
+  digits[1] = d % 10;
+  digits[2] = m / 10;
+  digits[3] = m % 10;
+  digits[4] = y / 1000;
+  digits[5] = (y / 100) % 10;
+  digits[6] = (y / 10) % 10;
+  digits[7] = y % 10;
 
   // Custom X coordinates for the 8 digits (DD/MM/YYYY)
   const int dX[8] = {57, 74, 96, 113, 135, 152, 168, 185};
