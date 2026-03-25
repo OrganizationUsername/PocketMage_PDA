@@ -831,8 +831,8 @@ char PocketmageKB::updateKeypress() {
                 static const char* cyc_E[] = {"E", "É", "È", "Ê", "Ë"};
                 static const char* cyc_i[] = {"i", "í", "ì", "î", "ï"};
                 static const char* cyc_I[] = {"I", "Í", "Ì", "Î", "Ï"};
-                static const char* cyc_o[] = {"o", "ó", "ò", "ô", "ö", "õ", "ø", "œ"};
-                static const char* cyc_O[] = {"O", "Ó", "Ò", "Ô", "Ö", "Õ", "Ø", "Œ"};
+                static const char* cyc_o[] = {"o", "ó", "ò", "ô", "ö", "õ", "ø"};
+                static const char* cyc_O[] = {"O", "Ó", "Ò", "Ô", "Ö", "Õ", "Ø"};
                 static const char* cyc_u[] = {"u", "ú", "ù", "û", "ü"};
                 static const char* cyc_U[] = {"U", "Ú", "Ù", "Û", "Ü"};
                 static const char* cyc_n[] = {"n", "ñ"};
@@ -847,8 +847,8 @@ char PocketmageKB::updateKeypress() {
                 else if (baseC == 'E') { activeCycle = cyc_E; activeCycleLen = 5; }
                 else if (baseC == 'i') { activeCycle = cyc_i; activeCycleLen = 5; }
                 else if (baseC == 'I') { activeCycle = cyc_I; activeCycleLen = 5; }
-                else if (baseC == 'o') { activeCycle = cyc_o; activeCycleLen = 8; }
-                else if (baseC == 'O') { activeCycle = cyc_O; activeCycleLen = 8; }
+                else if (baseC == 'o') { activeCycle = cyc_o; activeCycleLen = 7; }
+                else if (baseC == 'O') { activeCycle = cyc_O; activeCycleLen = 7; }
                 else if (baseC == 'u') { activeCycle = cyc_u; activeCycleLen = 5; }
                 else if (baseC == 'U') { activeCycle = cyc_U; activeCycleLen = 5; }
                 else if (baseC == 'n') { activeCycle = cyc_n; activeCycleLen = 2; }
