@@ -727,6 +727,16 @@ PocketmageKB& KB() { return pm_kb; }
 
 // ===================== public functions =====================
 char PocketmageKB::updateKeypress() {
+  // --- 1. UTF-8 Multi-Byte Buffer ---
+  // Because special characters are multi-byte UTF-8, we use a static buffer
+  // to return them one byte at a time to the main OS loop.
+  static char utf8Buffer[8] = {0};
+  if (utf8Buffer[0] != '\0') {
+    char c = utf8Buffer[0];
+    memmove(utf8Buffer, utf8Buffer + 1, 7); // Shift buffer left
+    return c;
+  }
+
   // Check for USB char
   char USB_CHAR = pop_USB_char();
   if (USB_CHAR != '\0') {
@@ -745,13 +755,147 @@ char PocketmageKB::updateKeypress() {
     int intstat = keypad_.readRegister(TCA8418_REG_INT_STAT);
     if ((intstat & 0x01) == 0) TCA8418_event_ = false;
 
-    if (k & 0x80) {   //Key pressed, not released
+    if (k != 0) {
+      bool isPress = (k & 0x80) != 0;
       k &= 0x7F;
       k--;
-      //return currentKB[k/10][k%10];
-      if ((k/10) < 4) {
+
+      if (isPress && (k / 10) < 4) {
         //Key was pressed, reset timeout counter
         CLOCK().setPrevTimeMillis(millis());
+
+        // --- 2. HOLD-TAB SPECIAL CHARACTER UI ---
+        if (k == 20) { // TAB KEY
+          unsigned long pressTime = millis();
+          bool charSelected = false;
+          int cycleIndex = 0;
+          char activeBaseChar = 0;
+          const char** activeCycle = nullptr;
+          int activeCycleLen = 0;
+          bool uiDrawn = false;
+
+          for (;;) {
+            // Draw the "Holding" hint after 100ms
+            if (!uiDrawn && (millis() - pressTime > 100)) {
+              u8g2.setDrawColor(0);
+              u8g2.setFont(u8g2_font_5x7_tf);
+              u8g2.drawBox(u8g2.getDisplayWidth()-u8g2.getStrWidth("XXXX/XX/XXXX"), u8g2.getDisplayHeight()- 8, u8g2.getStrWidth("XXXX/XX/XXXX"), 8);
+              u8g2.setDrawColor(1);
+              u8g2.drawStr(u8g2.getDisplayWidth()-u8g2.getStrWidth("INTL"), u8g2.getDisplayHeight(), "INTL");
+              u8g2.sendBuffer();
+              uiDrawn = true;
+            }
+
+            int next_k = keypad_.getEvent();
+            if (next_k != 0) {
+              bool nextPress = (next_k & 0x80) != 0;
+              next_k &= 0x7F;
+              next_k--;
+
+              // If TAB is RELEASED
+              if (!nextPress && next_k == 20) { 
+                if (!charSelected) {
+                  if (uiDrawn) {
+                    u8g2.clearBuffer();
+                    u8g2.sendBuffer();
+                  }
+                  // Return normal TAB depending on SHIFT state
+                  return (kbState_ == 1 || kbState_ == 3) ? 14 : 9; 
+                } else {
+                  // Push the selected UTF-8 string into the buffer
+                  String sel = activeCycle[cycleIndex];
+                  strncpy(utf8Buffer, sel.c_str(), 7);
+                  
+                  char c = utf8Buffer[0];
+                  memmove(utf8Buffer, utf8Buffer + 1, 7);
+                  
+                  u8g2.clearBuffer();
+                  u8g2.sendBuffer();
+                  return c; // Return first byte instantly
+                }
+              } 
+              // If another key is PRESSED while holding TAB
+              else if (nextPress && (next_k / 10) < 4) {
+                char baseC = 0;
+                switch (kbState_) {
+                  case 0: baseC = keysArray[next_k/10][next_k%10]; break;
+                  case 1: baseC = keysArraySHFT[next_k/10][next_k%10]; break;
+                  case 2: baseC = keysArrayFN[next_k/10][next_k%10]; break;
+                  case 3: baseC = keysArrayFN_SHFT[next_k/10][next_k%10]; break;
+                }
+
+                // Special character arrays (Native UTF-8 Strings)
+                static const char* cyc_a[] = {"a", "á", "à", "â", "ä", "ã", "å", "æ"};
+                static const char* cyc_A[] = {"A", "Á", "À", "Â", "Ä", "Ã", "Å", "Æ"};
+                static const char* cyc_e[] = {"e", "é", "è", "ê", "ë"};
+                static const char* cyc_E[] = {"E", "É", "È", "Ê", "Ë"};
+                static const char* cyc_i[] = {"i", "í", "ì", "î", "ï"};
+                static const char* cyc_I[] = {"I", "Í", "Ì", "Î", "Ï"};
+                static const char* cyc_o[] = {"o", "ó", "ò", "ô", "ö", "õ", "ø", "œ"};
+                static const char* cyc_O[] = {"O", "Ó", "Ò", "Ô", "Ö", "Õ", "Ø", "Œ"};
+                static const char* cyc_u[] = {"u", "ú", "ù", "û", "ü"};
+                static const char* cyc_U[] = {"U", "Ú", "Ù", "Û", "Ü"};
+                static const char* cyc_n[] = {"n", "ñ"};
+                static const char* cyc_N[] = {"N", "Ñ"};
+                static const char* cyc_c[] = {"c", "ç"};
+                static const char* cyc_C[] = {"C", "Ç"};
+
+                bool matched = true;
+                if (baseC == 'a') { activeCycle = cyc_a; activeCycleLen = 8; }
+                else if (baseC == 'A') { activeCycle = cyc_A; activeCycleLen = 8; }
+                else if (baseC == 'e') { activeCycle = cyc_e; activeCycleLen = 5; }
+                else if (baseC == 'E') { activeCycle = cyc_E; activeCycleLen = 5; }
+                else if (baseC == 'i') { activeCycle = cyc_i; activeCycleLen = 5; }
+                else if (baseC == 'I') { activeCycle = cyc_I; activeCycleLen = 5; }
+                else if (baseC == 'o') { activeCycle = cyc_o; activeCycleLen = 8; }
+                else if (baseC == 'O') { activeCycle = cyc_O; activeCycleLen = 8; }
+                else if (baseC == 'u') { activeCycle = cyc_u; activeCycleLen = 5; }
+                else if (baseC == 'U') { activeCycle = cyc_U; activeCycleLen = 5; }
+                else if (baseC == 'n') { activeCycle = cyc_n; activeCycleLen = 2; }
+                else if (baseC == 'N') { activeCycle = cyc_N; activeCycleLen = 2; }
+                else if (baseC == 'c') { activeCycle = cyc_c; activeCycleLen = 2; }
+                else if (baseC == 'C') { activeCycle = cyc_C; activeCycleLen = 2; }
+                else matched = false;
+
+                if (matched) {
+                  if (baseC == activeBaseChar) {
+                    cycleIndex = (cycleIndex + 1) % activeCycleLen;
+                  } else {
+                    activeBaseChar = baseC;
+                    cycleIndex = 1 % activeCycleLen;
+                  }
+                  charSelected = true;
+
+                  // Render Character Selector
+                  int cx = (u8g2.getDisplayWidth()-22*activeCycleLen)/2.0;
+                  u8g2.setDrawColor(0);
+                  u8g2.drawRBox(cx, 2, activeCycleLen*22, 28, 4);
+                  u8g2.setDrawColor(1);
+                  u8g2.drawRFrame(cx, 2, activeCycleLen*22, 28, 4);
+                  u8g2.setFont(u8g2_font_luBS18_tf);
+
+                  for (int i=0; i<activeCycleLen; i++) {
+                      if (i == cycleIndex) {
+                          u8g2.setDrawColor(1);
+                          u8g2.drawRBox(cx, 2, 22, 28, 4);
+                          u8g2.setDrawColor(0);
+                      } else {
+                          u8g2.setDrawColor(1);
+                      }
+                      u8g2.drawUTF8(cx + ((22-u8g2.getUTF8Width(activeCycle[i]))/2.0), 25, activeCycle[i]);
+                      u8g2.setDrawColor(0);
+                      cx += 22;
+                  }
+                  u8g2.sendBuffer();
+                  u8g2.setDrawColor(1);
+                  uiDrawn = true;
+                }
+              }
+            }
+            delay(10); // Don't choke the RTOS
+          }
+        }
+        // --- END SPECIAL CHARACTER LOGIC ---
 
         //Return Key
         switch (kbState_) {
@@ -771,7 +915,6 @@ char PocketmageKB::updateKeypress() {
   }
 
   return 0;
-
 }
 
 void PocketmageKB::checkUSBKB() {

@@ -4,7 +4,7 @@
 //       888          `8888'          888       //
 //       888         .8PY888.         888       //
 //       888        d8'  `888b        888       //
-//      o888o     o888o  o88888o     o888o      //
+//      o888o      o888o  o88888o      o888o      //
 
 #include <globals.h>
 #if !OTA_APP  // POCKETMAGE_OS
@@ -65,14 +65,42 @@ TXTState_NEW CurrentTXTState_NEW = TXT_;
 #pragma region Fonts
 #include <gfxfont.h>
 
-// Fast character width lookup (Bypasses getTextBounds)
-inline uint16_t getFastCharWidth(char c, const GFXfont* font) {
+// --- UTF-8 Decoding System ---
+inline uint16_t decodeUTF8(const char* str, uint16_t* index, uint16_t len) {
+  if (*index >= len) return 0;
+  uint8_t c = str[*index];
+  (*index)++;
+  
+  if (c < 0x80) return c; // Standard ASCII
+  if ((c & 0xE0) == 0xC0) { // 2-byte sequence
+    if (*index >= len) return c; // Incomplete, fallback safely
+    uint8_t c2 = str[*index]; (*index)++;
+    return ((c & 0x1F) << 6) | (c2 & 0x3F);
+  }
+  if ((c & 0xF0) == 0xE0) { // 3-byte sequence
+    if (*index + 1 >= len) return c;
+    uint8_t c2 = str[*index]; (*index)++;
+    uint8_t c3 = str[*index]; (*index)++;
+    return ((c & 0x0F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F);
+  }
+  return c; // Fallback
+}
+
+// Maps standard Unicode points to your custom font's 0x20-0xDF format
+inline uint8_t mapUnicodeToFontIndex(uint16_t unicode) {
+  if (unicode < 0x80) return unicode;
+  if (unicode >= 0x00A0 && unicode <= 0x00FF) return unicode - 0x20;
+  return 0x7F; // Replacement character for unsupported glyphs like 'ł' (U+0142)
+}
+
+// Fast character width lookup (Modified for mapped 8-bit glyphs)
+inline uint16_t getFastCharWidth(uint8_t c, const GFXfont* font) {
   if (!font) return 6; // Fallback for default 5x7 font
-  if (c == ' ') c = 'n'; // Retain your SPACEWIDTH_SYMBOL logic
+  if (c == ' ') c = 'n'; 
   
   if (c >= pgm_read_byte(&font->first) && c <= pgm_read_byte(&font->last)) {
     GFXglyph *glyph = &(((GFXglyph *)pgm_read_ptr(&font->glyph))[c - pgm_read_byte(&font->first)]);
-    return pgm_read_byte(&glyph->width); // width of bounding box
+    return pgm_read_byte(&glyph->width); 
   }
   return 0; 
 }
@@ -80,8 +108,6 @@ inline uint16_t getFastCharWidth(char c, const GFXfont* font) {
 // Fast line height lookup 
 inline uint16_t getFastCharHeight(const GFXfont* font) {
   if (!font) return 8;
-  // Base the height on the capital 'A' to prevent the line height from 
-  // bouncing up and down depending on lowercase vs uppercase characters
   if ('A' >= pgm_read_byte(&font->first) && 'A' <= pgm_read_byte(&font->last)) {
     GFXglyph *glyph = &(((GFXglyph *)pgm_read_ptr(&font->glyph))['A' - pgm_read_byte(&font->first)]);
     return pgm_read_byte(&glyph->height);
@@ -142,12 +168,12 @@ static ulong currentLineNum = 0;
 static ulong topVisibleLine = 0;
 
 #define MAX_LINES 1000    // Max number of lines in document
-#define LINE_CAP 64       // Max number of characters in a line
+#define LINE_CAP 64       // Max number of bytes in a line
 
 struct Line {
   char type = ' ';          // line type
-  char text[LINE_CAP + 1];  // line content
-  uint16_t len;             // line length
+  char text[LINE_CAP + 1];  // line content (UTF-8 Byte Array)
+  uint16_t len;             // line length in bytes
 };
 
 struct Document {
@@ -166,7 +192,7 @@ void initLine(Line& line) {
 #pragma region Editor Helpers
 // Helpers
 const GFXfont* pickFont(char style, bool bold, bool italic) {
-  FontMap& fm = fonts[fontStyle];  // currently active family
+  FontMap& fm = fonts[fontStyle];  
 
   switch (style) {
     case '1':  // H1
@@ -243,17 +269,15 @@ uint16_t getLineMaxHeight(Line& line) {
   else if (italicExists) font = pickFont(line.type, false, true);
   else font = pickFont(line.type, false, false);
 
-  // Instantly return the pre-calculated height instead of measuring string bounds
   return getFastCharHeight(font); 
 }
 
 int getCalculatedLineHeight(Line& line) {
-  if (line.type == 'H') return 8;  // Horizontal Rule
-  if (line.type == 'B') return 8;  // Blank Line
+  if (line.type == 'H') return 8;  
+  if (line.type == 'B') return 8;  
 
   int h = getLineMaxHeight(line);
   
-  // Add appropriate padding
   if (line.type == '1' || line.type == '2' || line.type == '3') {
     return h + HEADING_LINE_PADDING;
   }
@@ -262,13 +286,11 @@ int getCalculatedLineHeight(Line& line) {
 }
 
 int drawLineEink(Document& doc, ulong lineIndex, int startX, int startY, bool isSelected) {
-  // Extract the line using the passed document and index
   Line& line = doc.lines[lineIndex]; 
   
   char style = line.type;
   int cursorY = startY;
 
-  // Determine colors based on selection
   uint16_t fgColor;
   uint16_t bgColor;
 
@@ -281,64 +303,54 @@ int drawLineEink(Document& doc, ulong lineIndex, int startX, int startY, bool is
     bgColor = isSelected ? GxEPD_BLACK : GxEPD_WHITE;
   }
 
-
-  // Calculate height first so we can draw the background
   int hpx = getCalculatedLineHeight(line);
 
-  // Draw highlight background if selected
   if (isSelected) {
     display.fillRect(0, startY, display.width(), hpx, bgColor);
   }
 
-  // Set text color to contrast with the background
   display.setTextColor(fgColor);
 
-  // ---------- Non-Text Rendered Items ---------- //
-  // Horizontal Rules just print a line
   if (style == 'H') {
     display.drawFastHLine(0, cursorY + 3, display.width(), fgColor);
     display.drawFastHLine(0, cursorY + 4, display.width(), fgColor);
     return hpx;
   }
-  // Blank lines just take up space
   else if (style == 'B') {
     return 8;
   }
 
-  // ---------- Add Padding If Needed ---------- //
-  // Lists and Blockquotes are padded on the left
   if (style == '>')
     startX += SPECIAL_PADDING;
   else if (style == 'U' || style == 'O' || style == 'u' || style == 'o')
     startX += 2 * SPECIAL_PADDING;
-  // Code blocks are padded on both sides
   else if (style == 'C')
     startX += (SPECIAL_PADDING / 2);
 
-  // ---------- Render Text ---------- //
+  // ---------- Render Text with UTF-8 Support ---------- //
   bool bold = false;
   bool italic = false;
   int xpos = startX; 
-  char temp[2] = {0, '\0'};
-
   int baselineY = cursorY + getLineMaxHeight(line); 
 
-  for (uint16_t i = 0; i < line.len; i++) {
-    if (xpos > display.width()) continue;
+  uint16_t i = 0;
+  while (i < line.len) {
+    if (xpos > display.width()) break;
     
-    char c = line.text[i];
+    // Decode UTF-8 string into Unicode Code Point (Advances i automatically)
+    uint16_t unicode = decodeUTF8(line.text, &i, line.len);
 
-    if (c == '*') {
-      if (i == 0 || line.text[i - 1] != '*') {
-        uint8_t starCount = 0;
-        while (i + starCount < line.len && line.text[i + starCount] == '*' && starCount < 3)
-          starCount++;
-
-        switch (starCount) {
-          case 1: italic = !italic; break;
-          case 2: bold = !bold; break;
-          case 3: bold = !bold; italic = !italic; break;
-        }
+    if (unicode == '*') {
+      // Toggle formatting
+      int starCount = 1;
+      while (i < line.len && line.text[i] == '*' && starCount < 3) {
+        starCount++;
+        i++;
+      }
+      switch (starCount) {
+        case 1: italic = !italic; break;
+        case 2: bold = !bold; break;
+        case 3: bold = !bold; italic = !italic; break;
       }
       continue;
     }
@@ -346,32 +358,29 @@ int drawLineEink(Document& doc, ulong lineIndex, int startX, int startY, bool is
     const GFXfont* font = pickFont(style, bold, italic);
     display.setFont(font);
 
-    temp[0] = c;
-    display.setCursor(xpos, baselineY); 
-    display.print(temp);
+    // Map Unicode code point to the 8-bit glyph index in the custom font
+    uint8_t mappedChar = mapUnicodeToFontIndex(unicode);
 
-    // Apply fast width lookup
-    xpos += getFastCharWidth(c, font);
+    display.setCursor(xpos, baselineY); 
+    display.write(mappedChar); // Write natively supports raw glyph indices
+
+    xpos += getFastCharWidth(mappedChar, font);
   }
 
   // ---------- Post-Render Formatting ---------- //
-  // Blockquotes get a vertical line on the left
   if (style == '>') {
     display.drawFastVLine(SPECIAL_PADDING / 2, startY, hpx, fgColor);
     display.drawFastVLine((SPECIAL_PADDING / 2) + 1, startY, hpx, fgColor);
   }
-  // Code Blocks get a vertical line on each side
   else if (style == 'C') {
     display.drawFastVLine(SPECIAL_PADDING / 4, startY, hpx, fgColor);
     display.drawFastVLine(display.width() - (SPECIAL_PADDING / 4), startY, hpx, fgColor);
     display.drawFastVLine((SPECIAL_PADDING / 4) + 1, startY, hpx, fgColor);
     display.drawFastVLine(display.width() - (SPECIAL_PADDING / 4) - 1, startY, hpx, fgColor);
   }
-  // Headings get a horizontal line below them ONLY on the last line of the header block
   else if (style == '1' || style == '2' || style == '3') {
     bool isLastLineOfHeader = true;
     if (lineIndex < doc.lineCount - 1) {
-       // Peek ahead. If the next line is the exact same heading type, don't draw underline yet
        if (doc.lines[lineIndex + 1].type == style) {
            isLastLineOfHeader = false; 
        }
@@ -382,25 +391,21 @@ int drawLineEink(Document& doc, ulong lineIndex, int startX, int startY, bool is
       display.drawFastHLine(0, startY + hpx - 3, display.width(), fgColor);
     }
   }
-  // Unordered Lists get a '●' (Only uppercase 'U')
   else if (style == 'U') {
     display.fillCircle(startX - 8, startY + (hpx / 2), 3, fgColor);
   }
-  // Ordered Lists get their dynamic number (Only uppercase 'O')
   else if (style == 'O') {
     int listNum = 1;
-    // Scan up the array to find what number this item should be
     if (lineIndex > 0) {
       for (long k = lineIndex - 1; k >= 0; k--) {
         if (doc.lines[k].type == 'O') listNum++;
-        else if (doc.lines[k].type != 'o') break; // Hit a different type, chain broken
+        else if (doc.lines[k].type != 'o') break; 
       }
     }
 
     String numStr = String(listNum) + ".";
-    display.setFont(pickFont('O', false, false)); // Standard list font
+    display.setFont(pickFont('O', false, false)); 
     
-    // Measure width to properly right-align it against the padding
     int16_t nx, ny;
     uint16_t nw, nh;
     display.getTextBounds(numStr, 0, 0, &nx, &ny, &nw, &nh);
@@ -413,26 +418,19 @@ int drawLineEink(Document& doc, ulong lineIndex, int startX, int startY, bool is
 }
 
 void insertLineArray(ulong index) {
-  if (document.lineCount >= MAX_LINES) return; // Prevent overflow
-  
-  // Shift everything below the index down by 1
+  if (document.lineCount >= MAX_LINES) return; 
   if (index < document.lineCount) {
     memmove(&document.lines[index + 1], &document.lines[index], sizeof(Line) * (document.lineCount - index));
   }
-  
-  // Clear the new line
   initLine(document.lines[index]);
   document.lineCount++;
 }
 
 void deleteLineArray(ulong index) {
   if (index >= document.lineCount) return;
-  
-  // Shift everything below the index up by 1
   if (index < document.lineCount - 1) {
     memmove(&document.lines[index], &document.lines[index + 1], sizeof(Line) * (document.lineCount - index - 1));
   }
-  
   document.lineCount--;
 }
 
@@ -463,39 +461,39 @@ int findWrapIndex(const String& content, int startIndex, char style) {
   int maxLen = min((int)(content.length() - startIndex), (int)LINE_CAP);
   const GFXfont* activeFont = pickFont(style, bold, italic);
 
-  for (int i = 0; i < maxLen; i++) {
-    char c = content[startIndex + i];
+  uint16_t i = 0;
+  while (i < maxLen) {
+    uint16_t charStart = i;
+    uint16_t unicode = decodeUTF8(content.c_str() + startIndex, &i, maxLen);
 
-    if (c == ' ') lastSpaceIndex = i;
+    if (unicode == ' ') lastSpaceIndex = charStart;
 
-    if (c == '*') {
-      if (i == 0 || content[startIndex + i - 1] != '*') {
-        uint8_t starCount = 0;
-        while (i + starCount < maxLen && content[startIndex + i + starCount] == '*' && starCount < 3) {
-          starCount++;
-        }
-        switch (starCount) {
-          case 1: italic = !italic; break;
-          case 2: bold = !bold; break;
-          case 3: bold = !bold; italic = !italic; break;
-        }
-        activeFont = pickFont(style, bold, italic);
+    if (unicode == '*') {
+      uint8_t starCount = 1;
+      while (i < maxLen && content[startIndex + i] == '*' && starCount < 3) {
+        starCount++; i++;
       }
+      switch (starCount) {
+        case 1: italic = !italic; break;
+        case 2: bold = !bold; break;
+        case 3: bold = !bold; italic = !italic; break;
+      }
+      activeFont = pickFont(style, bold, italic);
       continue; 
     }
 
-    currentWidth += getFastCharWidth(c, activeFont);
+    uint8_t mappedChar = mapUnicodeToFontIndex(unicode);
+    currentWidth += getFastCharWidth(mappedChar, activeFont);
 
     if (currentWidth > availableWidth) {
       if (lastSpaceIndex > 0) return lastSpaceIndex;
-      return i > 0 ? i : 1; 
+      return charStart > 0 ? charStart : 1; 
     }
   }
 
   if (maxLen < (int)(content.length() - startIndex) && lastSpaceIndex > 0) {
     return lastSpaceIndex;
   }
-
   return maxLen; 
 }
 
@@ -507,7 +505,7 @@ void reflowParagraph(ulong startLine, uint16_t& activeCursor) {
   else if (baseStyle == 'O' || baseStyle == 'o') contStyle = 'o';
 
   String fullText;
-  fullText.reserve(512); // Pre-allocate to prevent heap choke
+  fullText.reserve(512); 
   fullText = document.lines[startLine].text;
   
   ulong endLine = startLine + 1;
@@ -672,16 +670,11 @@ void mergeLinesUp(ulong currLine, uint16_t& cursor) {
 }
 
 inline void insertChar(Line& line, uint16_t& cursor, char c) {
-  // Ignore if line is full
-  if (line.len >= LINE_CAP)
-    return;
+  if (line.len >= LINE_CAP) return;
 
-  // Only shift characters if inserting in the middle
   if (cursor < line.len) {
-    // Move the tail, including null terminator
     memmove(&line.text[cursor + 1], &line.text[cursor], line.len - cursor + 1);
   } else {
-    // Appending at end: just add character and null terminate
     line.text[line.len] = c;
     line.len++;
     line.text[line.len] = '\0';
@@ -689,25 +682,25 @@ inline void insertChar(Line& line, uint16_t& cursor, char c) {
     return;
   }
 
-  // Insert character in middle
   line.text[cursor] = c;
   line.len++;
   cursor++;
 }
 
 inline void deleteChar(Line& line, uint16_t& cursor) {
-  if (cursor == 0)
-    return;
+  if (cursor == 0) return;
 
-  memmove(&line.text[cursor - 1], &line.text[cursor], line.len - cursor + 1);
-
-  line.len--;
-  cursor--;
+  uint16_t old_cursor = cursor;
+  // Safely leap over UTF-8 continuation bytes to delete the entire glyph
+  do { cursor--; } while (cursor > 0 && (line.text[cursor] & 0xC0) == 0x80);
+  
+  uint16_t bytesToDelete = old_cursor - cursor;
+  memmove(&line.text[cursor], &line.text[old_cursor], line.len - old_cursor + 1);
+  line.len -= bytesToDelete;
 }
 
 void cycleTextStyle(Line& line, uint16_t& cursor) {
-  if (line.len == 0)
-    return;
+  if (line.len == 0) return;
 
   int leftBound = -1;
   int rightBound = -1;
@@ -715,7 +708,6 @@ void cycleTextStyle(Line& line, uint16_t& cursor) {
   uint8_t leftStars = 0;
   uint8_t rightStars = 0;
 
-  // --- 1. Find formatting block containing the cursor ---
   int i = 0;
   int activeStart = -1;
   uint8_t activeStars = 0;
@@ -730,13 +722,10 @@ void cycleTextStyle(Line& line, uint16_t& cursor) {
       }
 
       if (activeStars == 0) {
-        // Potential start of a formatting block
         activeStart = startIdx;
         activeStars = stars;
       } else if (activeStars == stars) {
-        // Matching closing stars found
         if (cursor >= activeStart && cursor <= i) {
-          // The cursor is inside this block
           leftBound = activeStart;
           rightBound = i;
           currentStars = activeStars;
@@ -744,11 +733,9 @@ void cycleTextStyle(Line& line, uint16_t& cursor) {
           rightStars = activeStars;
           break;
         }
-        // Cursor is not in this block; reset for the next pair
         activeStars = 0;
         activeStart = -1;
       } else {
-        // Mismatched stars; treat the current stars as a new opening
         activeStart = startIdx;
         activeStars = stars;
       }
@@ -757,45 +744,34 @@ void cycleTextStyle(Line& line, uint16_t& cursor) {
     }
   }
 
-  // --- 2. Fallback to current word boundaries if no block was found ---
   if (leftBound == -1) {
     leftBound = cursor;
     while (leftBound > 0 && line.text[leftBound - 1] != ' ') {
       leftBound--;
     }
-
     rightBound = cursor;
     while (rightBound < line.len && line.text[rightBound] != ' ') {
       rightBound++;
     }
-
     currentStars = 0;
     leftStars = 0;
     rightStars = 0;
   }
 
-  // --- 3. Determine next formatting ---
-  uint8_t nextStars = (currentStars + 1) % 4;  // 0->1->2->3->0
-
-  // Prevent buffer overflow
+  uint8_t nextStars = (currentStars + 1) % 4; 
   int sizeDiff = (nextStars * 2) - (leftStars + rightStars);
-  if (line.len + sizeDiff > LINE_CAP)
-    return;
+  if (line.len + sizeDiff > LINE_CAP) return;
 
-  // --- 4. Calculate cursor relative position inside formatting ---
   int contentStart = leftBound + leftStars;
   int contentEnd = rightBound - rightStars;
 
   int cursorOffset = cursor - contentStart;
-  if (cursorOffset < 0)
-    cursorOffset = 0;  // Cursor was on left stars
-  if (cursorOffset > (contentEnd - contentStart))
-    cursorOffset = contentEnd - contentStart;  // Cursor was on right stars
+  if (cursorOffset < 0) cursorOffset = 0; 
+  if (cursorOffset > (contentEnd - contentStart)) cursorOffset = contentEnd - contentStart; 
 
-  // --- 5. Remove current formatting ---
   if (rightStars > 0) {
     memmove(&line.text[rightBound - rightStars], &line.text[rightBound],
-            line.len - rightBound + 1);  // include null terminator
+            line.len - rightBound + 1); 
     line.len -= rightStars;
     rightBound -= rightStars;
   }
@@ -807,22 +783,16 @@ void cycleTextStyle(Line& line, uint16_t& cursor) {
     rightBound -= leftStars;
   }
 
-  // --- 6. Insert new formatting ---
   if (nextStars > 0) {
-    // Insert right stars
     memmove(&line.text[rightBound + nextStars], &line.text[rightBound], line.len - rightBound + 1);
-    for (int j = 0; j < nextStars; j++)
-      line.text[rightBound + j] = '*';
+    for (int j = 0; j < nextStars; j++) line.text[rightBound + j] = '*';
     line.len += nextStars;
 
-    // Insert left stars
     memmove(&line.text[leftBound + nextStars], &line.text[leftBound], line.len - leftBound + 1);
-    for (int j = 0; j < nextStars; j++)
-      line.text[leftBound + j] = '*';
+    for (int j = 0; j < nextStars; j++) line.text[leftBound + j] = '*';
     line.len += nextStars;
   }
 
-  // --- 7. Restore cursor position ---
   cursor = leftBound + nextStars + cursorOffset;
 }
 
@@ -831,7 +801,6 @@ void cycleParagraphStyle(ulong& currLine, uint16_t& cursor) {
   ulong startLine = currLine;
   char oldContStyle = activeType;
 
-  // 1. Find the top of the paragraph
   if (activeType == 'u' || activeType == 'U') {
     oldContStyle = 'u';
     while (startLine > 0 && document.lines[startLine].type == 'u') startLine--;
@@ -845,7 +814,6 @@ void cycleParagraphStyle(ulong& currLine, uint16_t& cursor) {
     }
   }
 
-  // 2. Cycle to the new base style
   static const char styleCycle[] = {'T', '1', '2', '3', '>', 'O', 'U', 'C', 'H'};
   static const int numStyles = sizeof(styleCycle) / sizeof(styleCycle[0]);
   
@@ -859,25 +827,20 @@ void cycleParagraphStyle(ulong& currLine, uint16_t& cursor) {
   }
   char newBaseStyle = styleCycle[(currentIndex + 1) % numStyles];
   
-  // Apply specific lowercase rules for lists
   char newContStyle = newBaseStyle;
   if (newBaseStyle == 'U') newContStyle = 'u';
   else if (newBaseStyle == 'O') newContStyle = 'o';
 
-  // 3. Extract text and track the absolute cursor
   int absoluteCursor = 0;
   String fullText;
-  fullText.reserve(512); // Prevent heap choke
+  fullText.reserve(512); 
   ulong endLine = startLine;
   
   while (endLine < document.lineCount) {
     if (endLine > startLine && document.lines[endLine].type != oldContStyle) break;
-    
-    // Log cursor position globally relative to the entire paragraph string
     if (endLine == currLine) {
       absoluteCursor = fullText.length() + (fullText.length() > 0 ? 1 : 0) + cursor;
     }
-    
     if (document.lines[endLine].len > 0) {
       if (fullText.length() > 0) fullText += " ";
       fullText += document.lines[endLine].text;
@@ -885,7 +848,6 @@ void cycleParagraphStyle(ulong& currLine, uint16_t& cursor) {
     endLine++;
   }
 
-  // 4. Repack text with the newly selected style using fast indexing
   ulong currWriteIdx = startLine;
   int textIndex = 0;
   int textLen = fullText.length();
@@ -908,7 +870,6 @@ void cycleParagraphStyle(ulong& currLine, uint16_t& cursor) {
     writeLine.text[LINE_CAP] = '\0';
     writeLine.len = strlen(writeLine.text);
     
-    // Check if the cursor lands in this chunk and restore it globally
     if (absoluteCursor != -1) {
       if (absoluteCursor <= writeLine.len) {
         currLine = currWriteIdx;
@@ -919,16 +880,13 @@ void cycleParagraphStyle(ulong& currLine, uint16_t& cursor) {
       }
     }
     
-    // Skip leading space for the next line
     if (textIndex < textLen && fullText[textIndex] == ' ') {
         textIndex++;
         if (absoluteCursor > 0) absoluteCursor--; 
     }
-    
     currWriteIdx++;
   }
   
-  // Failsafe for cycling styles on an empty line
   if (currWriteIdx == startLine) {
     Line& writeLine = document.lines[currWriteIdx];
     writeLine.type = newBaseStyle;
@@ -939,7 +897,6 @@ void cycleParagraphStyle(ulong& currLine, uint16_t& cursor) {
     currWriteIdx++;
   }
 
-  // 5. Fast cleanup leftover lines if the new font made the paragraph shorter
   if (endLine > currWriteIdx) {
     deleteLinesMultiple(currWriteIdx, endLine - currWriteIdx);
   }
@@ -949,69 +906,17 @@ void cycleParagraphStyle(ulong& currLine, uint16_t& cursor) {
 
 void setFontOLED(bool bold, bool italic) {
   if (bold && italic)
-    u8g2.setFont(u8g2_font_luBIS18_tf);  // bold italics
+    u8g2.setFont(u8g2_font_luBIS18_tf);  
   else if (bold && !italic)
-    u8g2.setFont(u8g2_font_luBS18_tf);  // bold
+    u8g2.setFont(u8g2_font_luBS18_tf);  
   else if (!bold && italic)
-    u8g2.setFont(u8g2_font_luIS18_tf);  // italics
+    u8g2.setFont(u8g2_font_luIS18_tf);  
   else
-    u8g2.setFont(u8g2_font_lubR18_tf);  // regular
+    u8g2.setFont(u8g2_font_lubR18_tf);  
   return;
 }
 
-int getLineWidthOLED(Line& line) {
-  bool bold = false;
-  bool italic = false;
-  int width = 0;  // total width in pixels
-  char temp[2] = {0, '\0'};
-
-  uint16_t i = 0;
-  while (i < line.len) {
-    char c = line.text[i];
-
-    if (c == '*') {
-      // count consecutive stars if there isn't a star before
-      if (i == 0 || line.text[i - 1] != '*') {
-        uint8_t starCount = 0;
-        while (i + starCount < line.len && line.text[i + starCount] == '*' && starCount < 3)
-          starCount++;
-
-        // toggle style based on number of stars
-        switch (starCount) {
-          case 1:
-            italic = !italic;
-            break;
-          case 2:
-            bold = !bold;
-            break;
-          case 3:
-            bold = !bold;
-            italic = !italic;
-            break;
-        }
-      }
-
-      //setFontOLED(false, false);
-      //  Use tiny font for stars
-      u8g2.setFont(u8g2_font_5x7_tf);
-    } else
-      setFontOLED(bold, italic);
-
-    // Count width
-    temp[0] = c;
-    width += u8g2.getStrWidth(temp);
-
-    // italics need to overlap a bit
-    if (italic && c != '*') width -= 3;
-
-    i++;
-  }
-
-  return width;
-}
-
 void toolBar(Line& line, bool bold, bool italic) {
-  // FN/SHIFT indicator centered
   u8g2.setFont(u8g2_font_5x7_tf);
 
   switch (KB().getKeyboardState()) {
@@ -1030,56 +935,30 @@ void toolBar(Line& line, bool bold, bool italic) {
       break;
   }
 
-  // Show line type
   char currentDocLineType = line.type;
   String lineTypeLabel;
 
   switch (currentDocLineType) {
-    case ' ':
-      lineTypeLabel = "ERR";
-      break;
-    case 'T':
-      lineTypeLabel = "BODY";
-      break;
-    case '1':
-      lineTypeLabel = "H1";
-      break;
-    case '2':
-      lineTypeLabel = "H2";
-      break;
-    case '3':
-      lineTypeLabel = "H3";
-      break;
-    case 'C':
-      lineTypeLabel = "CODE";
-      break;
-    case '>':
-      lineTypeLabel = "QUOTE";
-      break;
+    case ' ': lineTypeLabel = "ERR"; break;
+    case 'T': lineTypeLabel = "BODY"; break;
+    case '1': lineTypeLabel = "H1"; break;
+    case '2': lineTypeLabel = "H2"; break;
+    case '3': lineTypeLabel = "H3"; break;
+    case 'C': lineTypeLabel = "CODE"; break;
+    case '>': lineTypeLabel = "QUOTE"; break;
     case 'U':
-    case 'u':
-      lineTypeLabel = "U LIST";
-      break;
+    case 'u': lineTypeLabel = "U LIST"; break;
     case 'O':
-    case 'o':
-      lineTypeLabel = "O LIST";
-      break;
-    case 'H':
-      lineTypeLabel = "H RULE";
-      break;
-    case 'B':
-      lineTypeLabel = "BLANK LINE";
-      break;
-    default:
-      lineTypeLabel = "";
-      break;  // fallback if none match
+    case 'o': lineTypeLabel = "O LIST"; break;
+    case 'H': lineTypeLabel = "H RULE"; break;
+    case 'B': lineTypeLabel = "BLANK LINE"; break;
+    default:  lineTypeLabel = ""; break;  
   }
 
   if (lineTypeLabel.length() > 0) {
     u8g2.drawStr(0, u8g2.getDisplayHeight(), lineTypeLabel.c_str());
   }
 
-  // Bold and italic indicator
   if (bold == true && italic == true) {
     u8g2.drawStr(u8g2.getDisplayWidth() - u8g2.getStrWidth("BOLD+ITALIC"), u8g2.getDisplayHeight(),
                  "BOLD+ITALIC");
@@ -1095,32 +974,30 @@ void toolBar(Line& line, bool bold, bool italic) {
   }
 }
 
+uint8_t getFastOledCharWidth(uint16_t unicode, bool bold, bool italic, bool isTiny);
+
 void displayScrollPreviewOLED(Document& doc, ulong activeCursorLine) {
   u8g2.clearBuffer();
   u8g2.setDrawColor(1);
 
   int startX = 0; 
   int cursorY = 0;
-  int specialPadding = 8; // px
+  int specialPadding = 8; 
   
-  // 1. Dynamic Viewport: Keep active cursor near the top/middle of the OLED
   ulong displayTop = 0;
   if (activeCursorLine > 3) {
     displayTop = activeCursorLine - 3;
   }
 
-  // Draw Vertical Separator at x=76
   u8g2.drawVLine(76, 0, u8g2.getDisplayHeight());
 
-  // 2. Draw Minimap on the left (0 to 74)
   for (ulong i = displayTop; i < doc.lineCount; i++) {
-    if (cursorY > u8g2.getDisplayHeight()) break; // Off screen
+    if (cursorY > u8g2.getDisplayHeight()) break; 
 
     Line& line = doc.lines[i];
     char style = line.type;
     int padX = startX;
 
-    // Find height and padding for this line
     int max_hpx = 2;
     switch (style) {
       case '1': max_hpx = 5; break;
@@ -1137,14 +1014,12 @@ void displayScrollPreviewOLED(Document& doc, ulong activeCursorLine) {
         padX += specialPadding; 
         break;
       case 'H': 
-        // Horizontal Rules just print a line
         if (cursorY > 0) {
           u8g2.drawHLine(startX, cursorY, 74);
           cursorY += 3;
         }
         continue;
       case 'B': 
-        // Blank Lines just take up space
         cursorY += 4; 
         continue; 
       default: 
@@ -1152,14 +1027,11 @@ void displayScrollPreviewOLED(Document& doc, ulong activeCursorLine) {
         break;
     }
 
-    // Fast Width Approximation bounded to the left pane
     uint16_t boxWidth = map(line.len, 0, LINE_CAP, 0, 72 - padX);
-    if (boxWidth == 0 && line.len > 0) boxWidth = 2; // Minimum visible blip
+    if (boxWidth == 0 && line.len > 0) boxWidth = 2; 
 
-    // Draw Line Box
     u8g2.drawBox(padX + 2, cursorY, boxWidth, max_hpx);
 
-    // Draw Style Decorations
     if (style == '>') {
       u8g2.drawVLine(startX + (specialPadding / 2), cursorY, max_hpx+1);
     } 
@@ -1184,19 +1056,15 @@ void displayScrollPreviewOLED(Document& doc, ulong activeCursorLine) {
       u8g2.drawPixel(startX + specialPadding - 1, cursorY + 1);
     }
 
-    // Draw Selection Indicator tracking the active line
     if (i == activeCursorLine) {
       u8g2.drawFrame(padX, cursorY - 1, boxWidth + 4, max_hpx + 2);
-      // Draw left-pointing triangle on the separator wall
       u8g2.drawTriangle(74, cursorY-3, 74, cursorY + 3, 70, cursorY); 
     }
 
-    // Move down for next line
     cursorY += max_hpx + 2; 
-    if (style == '1' || style == '2' || style == '3') cursorY += 2; // Extra padding
+    if (style == '1' || style == '2' || style == '3') cursorY += 2;
   }
 
-  // 3. Draw Text Info on the Right Pane (78 to 128)
   Line& activeLine = doc.lines[activeCursorLine];
   String typeLabel = "";
   
@@ -1218,40 +1086,28 @@ void displayScrollPreviewOLED(Document& doc, ulong activeCursorLine) {
 
   u8g2.setFont(u8g2_font_5x7_tf);
   
-  // Print Line Number
   String lineStr = "L: " + String(activeCursorLine);
   u8g2.drawStr(80, 7, lineStr.c_str());
-  
-  // Print Line Type
   u8g2.drawStr(u8g2.getDisplayWidth() - u8g2.getStrWidth(typeLabel.c_str()), 7, typeLabel.c_str());
-  
-  // Draw a horizontal line under the header info
   u8g2.drawHLine(78, 10, u8g2.getDisplayWidth()-78);
 
-  // Print Full Text Preview (Single line, extending offscreen)
   u8g2.setFont(u8g2_font_lubR18_tf);
 
   if (activeLine.len > 0) {
     int prevCursorX = 80;
     int rightEdge = u8g2.getDisplayWidth(); 
-    char tChar[2] = {0, '\0'};
     
-    for (int j = 0; j < activeLine.len; j++) {
-      char c = activeLine.text[j];
+    uint16_t i = 0;
+    while(i < activeLine.len) {
+      if (prevCursorX > rightEdge) break; 
       
-      // Skip formatting stars so they don't clog up the preview
-      if (c == '*') continue; 
+      uint16_t unicode = decodeUTF8(activeLine.text, &i, activeLine.len);
+      if (unicode == '*') continue; 
       
-      tChar[0] = c;
-      int charWidth = u8g2.getStrWidth(tChar);
+      // FIX: Use our pre-cached fast lookup table instead!
+      int charWidth = getFastOledCharWidth(unicode, false, false, false);
       
-      // If adding this char goes past the screen, stop drawing to save cycles
-      if (prevCursorX > rightEdge) {
-        break; 
-      }
-      
-      // Draw character
-      u8g2.drawStr(prevCursorX, u8g2.getDisplayHeight(), tChar);
+      u8g2.drawGlyph(prevCursorX, u8g2.getDisplayHeight(), unicode);
       prevCursorX += charWidth;
     }
   }
@@ -1264,18 +1120,18 @@ bool isFolderEmpty(const char* dirPath) {
   
   File dir = global_fs->open(dirPath);
   if (!dir || !dir.isDirectory()) {
-    return true; // Folder doesn't exist or failed to open
+    return true; 
   }
 
   File file = dir.openNextFile();
   while (file) {
     if (!file.isDirectory()) {
-      return false; // Found at least one file
+      return false; 
     }
     file = dir.openNextFile();
   }
   
-  return true; // Folder is completely empty (or only contains empty subfolders)
+  return true; 
 }
 
 #pragma region Mrkdn File Ops
@@ -1287,10 +1143,9 @@ void saveMarkdownFile(const String& path) {
   }
 
   SDActive = true;
-  pocketmage::setCpuSpeed(240); // Boost clock for SD operation
+  pocketmage::setCpuSpeed(240); 
   delay(50);
 
-  // Determine save path
   String savePath = path;
   if (savePath == "" || savePath == "-")
     savePath = "/temp.txt";
@@ -1310,7 +1165,6 @@ void saveMarkdownFile(const String& path) {
   for (ulong i = 0; i < document.lineCount; i++) {
     Line& line = document.lines[i];
     
-    // Determine if this line is a word-wrap continuation of the previous line
     bool isContinuation = false;
     if (i > 0) {
       char pType = document.lines[i-1].type;
@@ -1324,15 +1178,12 @@ void saveMarkdownFile(const String& path) {
       else if (line.type == 'C' && pType == 'C') isContinuation = true;
     }
 
-    // If it is NOT a continuation, we must close the previous line and start a new Markdown block
     if (!isContinuation) {
-      // Close the previous line with a newline (and closing backtick if it was code)
       if (i > 0) {
         if (document.lines[i-1].type == 'C') file.print("`");
         file.println();
       }
 
-      // Print the Markdown prefix for the new line
       switch (line.type) {
         case '1': file.print("# "); break;
         case '2': file.print("## "); break;
@@ -1342,21 +1193,17 @@ void saveMarkdownFile(const String& path) {
         case 'O': file.print("1. "); break;
         case 'C': file.print("`"); break;
         case 'H': file.print("---"); break;
-        default: break; // 'T', 'B', 'u', 'o' have no prefix
+        default: break; 
       }
     } else {
-      // It is a continuation line. 
-      // Re-inject a space to re-join the wrapped words correctly.
       file.print(" ");
     }
 
-    // Print the actual text
     if (line.len > 0) {
       file.print(line.text);
     }
   }
 
-  // Close the very last line in the document
   if (document.lineCount > 0) {
     if (document.lines[document.lineCount - 1].type == 'C') file.print("`");
     file.println();
@@ -1364,31 +1211,21 @@ void saveMarkdownFile(const String& path) {
 
   file.close();
 
-  // Save metadata
   PM_SDAUTO().writeMetadata(savePath);
   PM_SDAUTO().setEditingFile(savePath);
 
   OLED().oledWord("Saved: " + savePath);
   delay(1000);
 
-  if (SAVE_POWER) pocketmage::setCpuSpeed(80); // Return to power save
+  if (SAVE_POWER) pocketmage::setCpuSpeed(80); 
   SDActive = false;
 }
 
 bool loadMarkdownFile(const String& path) {
   pocketmage::setCpuSpeed(240);
 
-  // Invalid file
   if (path == "" || path == " " || path == "-") {
     return false;
-    /*OLED().oledWord("Creating new file.");
-    delay(500);
-
-    document.lineCount = 1;
-    initLine(document.lines[0]);
-    document.lines[0].type = 'T';
-    currentLineNum = 0;
-    return;*/
   }
 
   if (PM_SDAUTO().getNoSD()) {
@@ -1402,18 +1239,8 @@ bool loadMarkdownFile(const String& path) {
   File file = global_fs->open(path.c_str(), FILE_READ);
   if (!file) {
     return false;
-    /*ESP_LOGE("SD", "File does not exist: %s", path.c_str());
-    OLED().oledWord("LOAD FAILED - FILE MISSING");
-    delay(2000);
-
-    document.lineCount = 1;
-    initLine(document.lines[0]);
-    document.lines[0].type = 'T';
-    currentLineNum = 0;
-    return;*/
   }
 
-  // Initialize document
   document.lineCount = 0;
   for (ulong i = 0; i < MAX_LINES; i++) {
     initLine(document.lines[i]);
@@ -1423,29 +1250,28 @@ bool loadMarkdownFile(const String& path) {
     String line = file.readStringUntil('\n');
     line.trim();
     char style = 'T';
-    String content = line;  // default is full line
+    String content = line; 
 
-    // Parse Markdown Prefix
     if (line.length() == 0) {
-      style = 'B'; // Blank line
+      style = 'B'; 
       content = "";
     } else if (line.startsWith("### ")) {
-      style = '3'; // Heading 3
+      style = '3'; 
       content = line.substring(4);  
     } else if (line.startsWith("## ")) {
-      style = '2'; // Heading 2
+      style = '2'; 
       content = line.substring(3);  
     } else if (line.startsWith("# ")) {
-      style = '1'; // Heading 1
+      style = '1'; 
       content = line.substring(2);  
     } else if (line.startsWith("> ")) {
-      style = '>'; // Quote Block
+      style = '>'; 
       content = line.substring(2);  
     } else if (line.startsWith("- ")) {
       style = 'U'; 
       content = line.substring(2); 
     } else if (line == "---") {
-      style = 'H'; // Horizontal Rule
+      style = 'H'; 
       content = "";  
     } else if ((line.startsWith("```")) || (line.startsWith("`") && line.endsWith("`")) || (line.startsWith("```") && line.endsWith("```"))) {
       if (line.startsWith("```"))
@@ -1455,19 +1281,18 @@ bool loadMarkdownFile(const String& path) {
       else if (line.startsWith("`") && line.endsWith("`"))
         content = line.substring(1, line.length() - 1);
 
-      style = 'C'; // Code Block
+      style = 'C'; 
     } else if (line.length() > 2 && isDigit(line.charAt(0)) && line.charAt(1) == '.' && line.charAt(2) == ' ') {
       style = 'O'; 
       content = line.substring(3); 
     }
 
-    // Split content if it exceeds pixel bounds OR the fixed array LINE_CAP bounds
     while (content.length() > 0 && document.lineCount < MAX_LINES) {
       int splitIndex = findWrapIndex(content, 0, style);
 
       String chunk = content.substring(0, splitIndex);
       content = content.substring(splitIndex);
-      content.trim(); // remove leading space from remainder
+      content.trim(); 
 
       Line& docLine = document.lines[document.lineCount];
       docLine.type = style;
@@ -1477,16 +1302,12 @@ bool loadMarkdownFile(const String& path) {
       
       document.lineCount++;
       
-      // --- Setup style for the continuation line ---
       if (content.length() > 0) {
         if (style == 'U') style = 'u';
         else if (style == 'O') style = 'o';
-        // Removed the rule that downgrades '1', '2', '3' to 'T'. 
-        // Headers will now retain their style across word wraps.
       }
     }
     
-    // Catch empty lines (like parsed 'B' or 'H') that bypassed the length split loop
     if (content.length() == 0 && (style == 'B' || style == 'H') && document.lineCount < MAX_LINES) {
         Line& docLine = document.lines[document.lineCount];
         docLine.type = style;
@@ -1525,15 +1346,13 @@ void newMarkdownFile(const String& path) {
   }
 
   SDActive = true;
-  pocketmage::setCpuSpeed(240); // Boost clock for SD operation
+  pocketmage::setCpuSpeed(240); 
   delay(50);
 
-  // Sanitize path
   String savePath = path;
   if (savePath == "" || savePath == "-") savePath = "/notes/temp.txt";
   if (!savePath.startsWith("/")) savePath = "/" + savePath;
 
-  // Create an empty file
   File file = global_fs->open(savePath.c_str(), FILE_WRITE);
   if (!file) {
     OLED().oledWord("CREATE FAILED");
@@ -1543,74 +1362,76 @@ void newMarkdownFile(const String& path) {
     if (SAVE_POWER) pocketmage::setCpuSpeed(80);
     return;
   }
-  file.close(); // Close immediately to leave it blank
+  file.close(); 
 
-  // Save metadata and update the system's active editing file
   PM_SDAUTO().writeMetadata(savePath);
   PM_SDAUTO().setEditingFile(savePath);
 
   OLED().oledWord("Created File");
   delay(1000);
 
-  // Load the newly created blank file into the editor memory
   loadMarkdownFile(savePath);
   
-  // Reset scrolling and cursor variables
   currentLineNum = 0;
   topVisibleLine = 0;
   updateScreen = true;
 
-  if (SAVE_POWER) pocketmage::setCpuSpeed(80); // Return to power save
+  if (SAVE_POWER) pocketmage::setCpuSpeed(80); 
   SDActive = false;
 }
 
 #pragma region OLED Editor
-// OLED char width cache
-static uint8_t oled_char_widths[5][128] = {0};
+// Extanded OLED char width cache (Handles up to 255 for extended ASCII/UTF-8 map)
+static uint8_t oled_char_widths[5][256] = {0};
 static bool oled_widths_cached = false;
 
 inline void initOledWidthCache() {
   if (oled_widths_cached) return;
-  char temp[2] = {0, '\0'};
+  char temp[3] = {0, 0, 0};
   
-  for (int i = 32; i < 127; i++) {
-    temp[0] = (char)i;
+  for (int i = 32; i < 256; i++) {
+    // Pack index 'i' into proper UTF-8 format for u8g2 to measure
+    if (i < 128) {
+       temp[0] = i; temp[1] = 0;
+    } else {
+       temp[0] = 0xC0 | (i >> 6);
+       temp[1] = 0x80 | (i & 0x3F);
+       temp[2] = 0;
+    }
     
     u8g2.setFont(u8g2_font_lubR18_tf);
-    oled_char_widths[0][i] = u8g2.getStrWidth(temp);
+    oled_char_widths[0][i] = u8g2.getUTF8Width(temp);
     
     u8g2.setFont(u8g2_font_luBS18_tf);
-    oled_char_widths[1][i] = u8g2.getStrWidth(temp);
+    oled_char_widths[1][i] = u8g2.getUTF8Width(temp);
     
     u8g2.setFont(u8g2_font_luIS18_tf);
-    oled_char_widths[2][i] = u8g2.getStrWidth(temp);
+    oled_char_widths[2][i] = u8g2.getUTF8Width(temp);
     
     u8g2.setFont(u8g2_font_luBIS18_tf);
-    oled_char_widths[3][i] = u8g2.getStrWidth(temp);
+    oled_char_widths[3][i] = u8g2.getUTF8Width(temp);
     
     u8g2.setFont(u8g2_font_5x7_tf);
-    oled_char_widths[4][i] = u8g2.getStrWidth(temp);
+    oled_char_widths[4][i] = u8g2.getUTF8Width(temp);
   }
   oled_widths_cached = true;
 }
 
-inline uint8_t getFastOledCharWidth(char c, bool bold, bool italic, bool isTiny) {
-  if (c < 32 || c > 126) return 0; // Handle non-printable chars safely
-  if (isTiny) return oled_char_widths[4][(uint8_t)c];
+inline uint8_t getFastOledCharWidth(uint16_t unicode, bool bold, bool italic, bool isTiny) {
+  if (unicode < 32 || unicode > 255) return 0; // Safely ignore control chars and unmapped blocks
+  if (isTiny) return oled_char_widths[4][unicode];
   
   uint8_t fontIdx = 0;
   if (bold && italic) fontIdx = 3;
   else if (italic) fontIdx = 2;
   else if (bold) fontIdx = 1;
   
-  return oled_char_widths[fontIdx][(uint8_t)c];
+  return oled_char_widths[fontIdx][unicode];
 }
 
 // OLED Editor
 void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
   u8g2.clearBuffer();
-  
-  // Initialize the width cache on the very first frame
   initOledWidthCache();
 
   int display_w = u8g2.getDisplayWidth();
@@ -1623,14 +1444,18 @@ void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
   bool bold = false;
   bool italic = false;
 
-  // --- PASS 1: Single-sweep width and cursor calculation (Instantly uses LUT) ---
-  for (uint16_t i = 0; i < line.len; i++) {
-    char c = line.text[i];
+  // --- PASS 1: Single-sweep UTF-8 width and cursor calculation ---
+  uint16_t i = 0;
+  while (i < line.len) {
+    uint16_t start_i = i;
+    uint16_t unicode = decodeUTF8(line.text, &i, line.len);
 
-    if (c == '*') {
-      if (i == 0 || line.text[i - 1] != '*') {
-        uint8_t starCount = 0;
-        while (i + starCount < line.len && line.text[i + starCount] == '*' && starCount < 3) starCount++;
+    if (unicode == '*') {
+      if (start_i == 0 || line.text[start_i - 1] != '*') {
+        uint8_t starCount = 1;
+        while (i < line.len && line.text[i] == '*' && starCount < 3) {
+          starCount++; i++;
+        }
         switch (starCount) {
           case 1: italic = !italic; break;
           case 2: bold = !bold; break;
@@ -1639,26 +1464,19 @@ void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
       }
       total_pixel_width += getFastOledCharWidth('*', false, false, true);
     } else {
-      int w = getFastOledCharWidth(c, bold, italic, false);
-      if (italic) w -= 3; // italic overlap adjustment
+      int w = getFastOledCharWidth(unicode, bold, italic, false);
+      if (italic) w -= 3; 
       total_pixel_width += w;
     }
 
-    // Track where the cursor is in pixels
-    if (i < cursor_pos) {
-       cursor_pixel_offset = total_pixel_width;
-    }
-    // Track the formatting at the cursor for the toolbar
-    if (i + 1 == cursor_pos) {
-       currentWordBold = bold;
-       currentWordItalic = italic;
-    }
+    if (start_i < cursor_pos) cursor_pixel_offset = total_pixel_width;
+    if (i == cursor_pos) { currentWordBold = bold; currentWordItalic = italic; }
   }
 
   // --- DETERMINE SCROLL OFFSET ---
   int line_start = 0;
   if (total_pixel_width >= display_w - 5) {
-    if (cursor_pos == line.len) {
+    if (cursor_pos >= line.len) {
       line_start = display_w - 8 - total_pixel_width;
     } else if (cursor_pixel_offset > (display_w - 8) / 2) {
       line_start = ((display_w - 8) / 2) - cursor_pixel_offset;
@@ -1668,23 +1486,24 @@ void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
     }
   }
 
-  // --- PASS 2: Render characters ---
+  // --- PASS 2: Render UTF-8 characters ---
   int xpos = line_start;
   bold = false; 
   italic = false;
 
-  // Draw cursor at position 0
-  if (cursor_pos == 0) {
-    u8g2.drawVLine(xpos, 1, 22);
-  }
+  if (cursor_pos == 0) u8g2.drawVLine(xpos, 1, 22);
 
-  for (uint16_t i = 0; i < line.len; i++) {
-    char c = line.text[i];
+  i = 0;
+  while (i < line.len) {
+    uint16_t start_i = i;
+    uint16_t unicode = decodeUTF8(line.text, &i, line.len);
 
-    if (c == '*') {
-      if (i == 0 || line.text[i - 1] != '*') {
-        uint8_t starCount = 0;
-        while (i + starCount < line.len && line.text[i + starCount] == '*' && starCount < 3) starCount++;
+    if (unicode == '*') {
+      if (start_i == 0 || line.text[start_i - 1] != '*') {
+        uint8_t starCount = 1;
+        while (i < line.len && line.text[i] == '*' && starCount < 3) {
+          starCount++; i++;
+        }
         switch (starCount) {
           case 1: italic = !italic; break;
           case 2: bold = !bold; break;
@@ -1694,37 +1513,25 @@ void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
       
       u8g2.setFont(u8g2_font_5x7_tf);
       int w = getFastOledCharWidth('*', false, false, true);
-      
-      if (xpos + w >= 0 && xpos <= display_w) {
-        // FAST: Render glyph directly
-        u8g2.drawGlyph(xpos, 8, '*'); 
-      }
+      if (xpos + w >= 0 && xpos <= display_w) u8g2.drawGlyph(xpos, 8, '*'); 
       xpos += w;
     } else {
       setFontOLED(bold, italic);
-      int char_w = getFastOledCharWidth(c, bold, italic, false);
+      int char_w = getFastOledCharWidth(unicode, bold, italic, false);
 
       if (xpos + char_w >= 0 && xpos <= display_w) {
-        // FAST: Render glyph directly
-        u8g2.drawGlyph(xpos, 20, c); 
+        u8g2.drawGlyph(xpos, 20, unicode); 
       }
       
       xpos += char_w;
       if (italic) xpos -= 3;
     }
 
-    // Draw cursor
-    if (cursor_pos == i + 1) {
-      u8g2.drawVLine(xpos, 1, 22);
-    }
+    if (cursor_pos == i) u8g2.drawVLine(xpos, 1, 22);
   }
 
-  // Render Toolbar or Infobar
-  if (currentlyTyping) {
-    toolBar(line, currentWordBold, currentWordItalic);
-  } else {
-    OLED().infoBar();
-  }
+  if (currentlyTyping) toolBar(line, currentWordBold, currentWordItalic);
+  else OLED().infoBar();
 
   u8g2.sendBuffer();
 }
@@ -1732,12 +1539,10 @@ void editorOledDisplay(Line& line, uint16_t cursor_pos, bool currentlyTyping) {
 #pragma region E-Ink Editor
 // E-Ink Editor
 void editorEinkDisplay(Document& doc, uint16_t currentLineNum) {
-  // Scroll up boundary
   if (currentLineNum < topVisibleLine) {
     topVisibleLine = currentLineNum;
   }
 
-  // Scroll down boundary
   uint16_t j = 0;
   while (j <= doc.lineCount) {
     int cursorBottomY = 0;
@@ -1746,27 +1551,19 @@ void editorEinkDisplay(Document& doc, uint16_t currentLineNum) {
       cursorBottomY += getCalculatedLineHeight(doc.lines[i]);
     }
 
-    // Current line offscreen, move window and retest
     if (cursorBottomY > display.height()) {
       topVisibleLine++;
     } else {
       break;
     }
-
-    // Ensure loop doesn't get stuck
     j++;
   }
 
-  // Render the viewport
   display.fillScreen(GxEPD_WHITE); 
-  
   int currentY = 0;
 
   for (uint16_t i = topVisibleLine; i < doc.lineCount; i++) {
-    Line& line = doc.lines[i];
     bool isSelected = (i == currentLineNum);
-    
-    // Pass the document and index
     int heightUsed = drawLineEink(doc, i, 0, currentY, isSelected); 
     
     currentY += heightUsed;
@@ -1779,43 +1576,33 @@ void editor(char inchar) {
   static long lastInput = millis();
   bool currentlyTyping = false;
   
-  // Style cycling debounce variables
   static unsigned long lastStyleCycleMillis = 0;
   static bool pendingStyleRefresh = false;
 
   Line& line = document.lines[currentLineNum];
 
-  // Prevent memory corruption if scrolling to a shorter line
-  if (cursor_pos > line.len) {
-    cursor_pos = line.len;
-  }
+  if (cursor_pos > line.len) cursor_pos = line.len;
 
-  // 1. Process Input if a key was pressed
   if (inchar != 0) {
     lastInput = millis();
 
-    // CR Recieved (ENTER KEY)
+    // ENTER KEY
     if (inchar == 13) {
       Line& activeLine = document.lines[currentLineNum];
 
-      // 1. Split text at the cursor
       String leftHalf = String(activeLine.text).substring(0, cursor_pos);
       String rightHalf = String(activeLine.text).substring(cursor_pos);
       
-      // Update current line
       strncpy(activeLine.text, leftHalf.c_str(), LINE_CAP);
       activeLine.text[LINE_CAP] = '\0';
       activeLine.len = leftHalf.length();
 
-      // 2. Insert blank line ('B') to create the paragraph break
       insertLineArray(currentLineNum + 1);
       document.lines[currentLineNum + 1].type = 'B';
       
-      // 3. Insert new text line for the right half of the split
       insertLineArray(currentLineNum + 2);
       Line& newLine = document.lines[currentLineNum + 2];
       
-      // Determine style for the new line
       if (activeLine.type == 'U' || activeLine.type == 'u') newLine.type = 'U'; 
       else if (activeLine.type == 'O' || activeLine.type == 'o') newLine.type = 'O'; 
       else if (activeLine.type == '>') newLine.type = '>';
@@ -1826,23 +1613,19 @@ void editor(char inchar) {
       newLine.text[LINE_CAP] = '\0';
       newLine.len = rightHalf.length();
 
-      // 4. Move cursor to the new line
       currentLineNum += 2;
       cursor_pos = 0;
       updateScreen = true;
       
-      // Reflow the new line in case the rightHalf was huge
       reflowParagraph(currentLineNum, cursor_pos);
     }
 
-    // SHIFT Recieved
     else if (inchar == 17) {
       if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) KB().setKeyboardState(NORMAL);
       else if (KB().getKeyboardState() == FUNC) KB().setKeyboardState(FN_SHIFT);
       else KB().setKeyboardState(SHIFT);
     }
 
-    // FN Recieved
     else if (inchar == 18) {
       if (KB().getKeyboardState() == FUNC || KB().getKeyboardState() == FN_SHIFT) KB().setKeyboardState(NORMAL);
       else if (KB().getKeyboardState() == SHIFT) KB().setKeyboardState(FN_SHIFT);
@@ -1854,8 +1637,6 @@ void editor(char inchar) {
       if (cursor_pos > 0) {
         deleteChar(document.lines[currentLineNum], cursor_pos);
         
-        // --- OPTIMIZATION: Backspace Bypass ---
-        // Only reflow the paragraph if there is text on the NEXT line that needs to flow upwards.
         bool hasContinuation = false;
         if (currentLineNum + 1 < document.lineCount) {
           char bType = document.lines[currentLineNum].type;
@@ -1866,13 +1647,9 @@ void editor(char inchar) {
         }
 
         if (hasContinuation) {
-          ulong preReflowLine = currentLineNum; // Capture state
-          reflowParagraph(currentLineNum, cursor_pos); // Reflow text inwards
-          
-          // Trigger E-ink update if word-wrap pulled the cursor up a line
-          if (currentLineNum != preReflowLine) {
-            updateScreen = true;
-          }
+          ulong preReflowLine = currentLineNum; 
+          reflowParagraph(currentLineNum, cursor_pos); 
+          if (currentLineNum != preReflowLine) updateScreen = true;
         }
       } else {
         mergeLinesUp(currentLineNum, cursor_pos);
@@ -1882,7 +1659,7 @@ void editor(char inchar) {
     // LEFT
     else if (inchar == 19) {
       if (cursor_pos > 0) {
-        cursor_pos--;
+        do { cursor_pos--; } while (cursor_pos > 0 && (document.lines[currentLineNum].text[cursor_pos] & 0xC0) == 0x80);
       } else if (currentLineNum > 0) {
         currentLineNum--;
         cursor_pos = document.lines[currentLineNum].len;
@@ -1893,7 +1670,7 @@ void editor(char inchar) {
     // RIGHT
     else if (inchar == 21) {
       if (cursor_pos < document.lines[currentLineNum].len) {
-        cursor_pos++;
+        do { cursor_pos++; } while (cursor_pos < document.lines[currentLineNum].len && (document.lines[currentLineNum].text[cursor_pos] & 0xC0) == 0x80);
       } else if (currentLineNum < document.lineCount - 1) {
         currentLineNum++;
         cursor_pos = 0;
@@ -1901,23 +1678,18 @@ void editor(char inchar) {
       }
     }
 
-    // CENTER
     else if (inchar == 20) {}
 
-    // SHIFT+LEFT (Cycle Paragraph Style)
     else if (inchar == 28) {
       cycleParagraphStyle(currentLineNum, cursor_pos);
-      // Log the time and flag that we need an E-ink update soon
       lastStyleCycleMillis = millis();
       pendingStyleRefresh = true;
     }
 
-    // SHIFT+RIGHT
     else if (inchar == 30) {
       cycleTextStyle(document.lines[currentLineNum], cursor_pos);
     }
 
-    // SHIFT+CENTER (New File)
     else if (inchar == 29) {
       if (CurrentTXTState_NEW != JOURNAL_MODE) {
         CurrentTXTState_NEW = NEW_FILE;
@@ -1925,16 +1697,11 @@ void editor(char inchar) {
       }
     }
 
-    // FN+LEFT (Home)
     else if (inchar == 12) {
-      if (CurrentTXTState_NEW != JOURNAL_MODE) {
-        HOME_INIT();
-      } else {
-        JOURNAL_INIT(); 
-      }
+      if (CurrentTXTState_NEW != JOURNAL_MODE) HOME_INIT();
+      else JOURNAL_INIT(); 
     }
 
-    // FN+RIGHT (Save File)
     else if (inchar == 6) {
       if (CurrentTXTState_NEW != JOURNAL_MODE) {
         String savePath = PM_SDAUTO().getEditingFile();
@@ -1946,43 +1713,30 @@ void editor(char inchar) {
           saveMarkdownFile(savePath);
         }
       } else {
-        // Journal save
         String savePath = getCurrentJournal();
         if (!savePath.startsWith("/")) savePath = "/" + savePath;
         saveMarkdownFile(savePath);
       }
     }
 
-    // FN+CENTER (Load File)
     else if (inchar == 7) {
       if (CurrentTXTState_NEW != JOURNAL_MODE) {
         CurrentTXTState_NEW = LOAD_FILE;
         KB().setKeyboardState(NORMAL);
       } else {
-        // Journal load
         String outPath = getCurrentJournal();
         if (!outPath.startsWith("/")) outPath = "/" + outPath;
         loadMarkdownFile(outPath);
       }
     }
 
-    // FN+SHIFT+LEFT
-    else if (inchar == 24) {
-      cursor_pos = 0;
-    }
-
-    // FN+SHIFT+RIGHT
-    else if (inchar == 26) {
-      cursor_pos = document.lines[currentLineNum].len;
-    }
-
-    // FN+SHIFT+CENTER
+    else if (inchar == 24) cursor_pos = 0;
+    else if (inchar == 26) cursor_pos = document.lines[currentLineNum].len;
     else if (inchar == 25) {}
 
-    // TAB / SHIFT+TAB (Word Navigation)
+    // TAB / SHIFT+TAB
     else if (inchar == 9 || inchar == 14) {
       if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT || inchar == 14) {
-        // --- PREVIOUS WORD (Shift + Tab) ---
         if (cursor_pos == 0) {
           if (currentLineNum > 0) {
             currentLineNum--;
@@ -1994,7 +1748,6 @@ void editor(char inchar) {
           while (cursor_pos > 0 && document.lines[currentLineNum].text[cursor_pos - 1] != ' ') cursor_pos--;
         }
       } else {
-        // --- NEXT WORD (Tab) ---
         if (cursor_pos >= line.len) {
           if (currentLineNum < document.lineCount - 1) {
             currentLineNum++;
@@ -2030,17 +1783,14 @@ void editor(char inchar) {
     }
   }
 
-  // Debounce Timer for Style Cycling
   if (pendingStyleRefresh && (millis() - lastStyleCycleMillis > 1000)) {
     updateScreen = true;
     pendingStyleRefresh = false;
   }
 
-  // Determine Toolbar State
   if (millis() - lastInput > IDLE_TIME) currentlyTyping = false;
   else currentlyTyping = true;
 
-  // Render OLED
   unsigned long currentMillis = millis();
   if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
     OLEDFPSMillis = currentMillis;
@@ -2221,26 +1971,21 @@ void processKB_TXT_NEW() {
   OLED().setPowerSave(false);
   disableTimeout = false;
   
-  // Temporary input buffer for filenames (SAVE_AS, NEW_FILE)
   static String inputBuffer = "";
 
-  // Read input ONCE per loop
   char inchar = KB().updateKeypress();
   unsigned long currentMillis = millis();
 
-  // Boost CPU on keypress
   if (inchar != 0) {
     pocketmage::setCpuSpeed(240);
   }
 
-  // Check for scrolling independent of keyboard timing
   if (CurrentTXTState_NEW == TXT_ || CurrentTXTState_NEW == JOURNAL_MODE) {
     if (TOUCH().updateScroll(document.lineCount, currentLineNum)) {
-      updateScreen = true; // Instantly trigger E-ink update on scroll
+      updateScreen = true; 
     }
   }
 
-  // Route the input to the current state
   switch (CurrentTXTState_NEW) {
     case TXT_:
     case JOURNAL_MODE:
@@ -2252,7 +1997,6 @@ void processKB_TXT_NEW() {
         if (inchar == 0) {
           // Do nothing
         }
-        // CR Recieved (ENTER)
         else if (inchar == 13) {
           if (inputBuffer != "" && inputBuffer != "-") {
             if (!inputBuffer.startsWith("/notes/")) inputBuffer = "/notes/" + inputBuffer;
@@ -2265,46 +2009,37 @@ void processKB_TXT_NEW() {
           }
           inputBuffer = "";
         }
-        // SHIFT Recieved
         else if (inchar == 17) {
           if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) KB().setKeyboardState(NORMAL);
           else if (KB().getKeyboardState() == FUNC) KB().setKeyboardState(FN_SHIFT);
           else KB().setKeyboardState(SHIFT);
         }
-        // FN Recieved
         else if (inchar == 18) {
           if (KB().getKeyboardState() == FUNC || KB().getKeyboardState() == FN_SHIFT) KB().setKeyboardState(NORMAL);
           else if (KB().getKeyboardState() == SHIFT) KB().setKeyboardState(FN_SHIFT);
           else KB().setKeyboardState(FUNC);
         }
-        // Space Recieved
         else if (inchar == 32) {
-          // Spaces not allowed in filenames
         }
-        // ESC / CLEAR Recieved
         else if (inchar == 20) {
           inputBuffer = "";
         }
-        // BKSP Recieved
         else if (inchar == 8) {
           if (inputBuffer.length() > 0) {
             inputBuffer.remove(inputBuffer.length() - 1);
           }
         }
-        // Home recieved
         else if (inchar == 12) {
           CurrentTXTState_NEW = TXT_;
         }
-        // Normal Character
         else {
           inputBuffer += inchar;
-          if (inchar >= 48 && inchar <= 57) {}  // Only leave FN on if typing numbers
+          if (inchar >= 48 && inchar <= 57) {} 
           else if (KB().getKeyboardState() != NORMAL) {
             KB().setKeyboardState(NORMAL);
           }
         }
 
-        // Render OLED for text input
         if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
           OLEDFPSMillis = currentMillis;
           OLED().oledLine(inputBuffer, inputBuffer.length(), false, "Input Filename");
@@ -2315,9 +2050,7 @@ void processKB_TXT_NEW() {
     case NEW_FILE:
       if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
         if (inchar == 0) {
-          // Do nothing
         }
-        // CR Recieved (ENTER)
         else if (inchar == 13) {
           if (inputBuffer != "" && inputBuffer != "-") {
             if (!inputBuffer.startsWith("/notes/")) inputBuffer = "/notes/" + inputBuffer;
@@ -2331,46 +2064,37 @@ void processKB_TXT_NEW() {
           }
           inputBuffer = "";
         }
-        // SHIFT Recieved
         else if (inchar == 17) {
           if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) KB().setKeyboardState(NORMAL);
           else if (KB().getKeyboardState() == FUNC) KB().setKeyboardState(FN_SHIFT);
           else KB().setKeyboardState(SHIFT);
         }
-        // FN Recieved
         else if (inchar == 18) {
           if (KB().getKeyboardState() == FUNC || KB().getKeyboardState() == FN_SHIFT) KB().setKeyboardState(NORMAL);
           else if (KB().getKeyboardState() == SHIFT) KB().setKeyboardState(FN_SHIFT);
           else KB().setKeyboardState(FUNC);
         }
-        // Space Recieved
         else if (inchar == 32) {
-          // Spaces not allowed in filenames
         }
-        // ESC / CLEAR Recieved
         else if (inchar == 20) {
           inputBuffer = "";
         }
-        // BKSP Recieved
         else if (inchar == 8) {
           if (inputBuffer.length() > 0) {
             inputBuffer.remove(inputBuffer.length() - 1);
           }
         }
-        // Home recieved
         else if (inchar == 12) {
           CurrentTXTState_NEW = TXT_;
         }
-        // Normal Character
         else {
           inputBuffer += inchar;
-          if (inchar >= 48 && inchar <= 57) {}  // Only leave FN on if typing numbers
+          if (inchar >= 48 && inchar <= 57) {} 
           else if (KB().getKeyboardState() != NORMAL) {
             KB().setKeyboardState(NORMAL);
           }
         }
 
-        // Render OLED for text input
         if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
           OLEDFPSMillis = currentMillis;
           OLED().oledLine(inputBuffer, inputBuffer.length(), false, "Name New File");
@@ -2381,12 +2105,10 @@ void processKB_TXT_NEW() {
     case LOAD_FILE:
       String outPath = fileWizardMini(false, "/notes", inchar);
       if (outPath == "_EXIT_") {
-        // Return to TXT
         CurrentTXTState_NEW = TXT_;
         break;
       }
       else if (outPath != "") {
-        // Ensure file is a .txt or .md
         if (outPath.endsWith(".txt") || outPath.endsWith(".md")) {
           if (!outPath.startsWith("/")) outPath = "/" + outPath;
           loadMarkdownFile(outPath);
