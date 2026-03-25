@@ -462,7 +462,10 @@ int boolPrompt(String promptText) {
       if (!noTimeout)  checkTimeout();
       if (DEBUG_VERBOSE) printDebug();
     #endif
-    
+
+    // Set timeout
+    CLOCK().setPrevTimeMillis(millis());
+
     updateBattState();
 
     // Redraw if background tasks overwrite the screen
@@ -944,6 +947,65 @@ void checkCrashState() {
 
     PM_SDAUTO().setEditingFile("");
     waitForKeypress(crashMsg);
+  }
+}
+
+void checkRTCPowerLoss() {
+  // Check if RTC lost power (e.g., coin cell drained/removed)
+  bool in = false;
+
+  // SET CLOCK IF NEEDED
+  if (SET_CLOCK_ON_UPLOAD || CLOCK().getRTC().lostPower()) {
+    CLOCK().setToCompileTimeUTC();
+    in = true;
+  }
+
+  if (in) {
+    // Temporarily disable the sleep timeout so the setup prompts don't force a sleep loop
+    bool previousTimeoutState = noTimeout;
+    noTimeout = true;
+
+    // Get the current (inaccurate) time from the RTC to use as a baseline
+    DateTime now = CLOCK().nowDT();
+    
+    // Format the baseline date to YYYYMMDD for datePrompt()
+    char defaultDate[9];
+    snprintf(defaultDate, sizeof(defaultDate), "%04d%02d%02d", now.year(), now.month(), now.day());
+    
+    // Format the baseline time to HHMM for timePrompt()
+    int defaultTime = (now.hour() * 100) + now.minute();
+    
+    // Display text
+    bool setTime = boolPrompt("Power lost, set clock?");
+    if (!setTime) {
+      noTimeout = previousTimeoutState; // Restore before early exit
+      return;
+    }
+
+    // 1. Launch Date Prompt
+    String newDateStr = datePrompt(String(defaultDate)); 
+    
+    // 2. Launch Time Prompt
+    int newTimeInt = timePrompt(defaultTime); 
+    
+    // Parse the DD/MM/YYYY string returned by datePrompt
+    int d = newDateStr.substring(0, 2).toInt();
+    int m = newDateStr.substring(3, 5).toInt();
+    int y = newDateStr.substring(6, 10).toInt();
+    
+    // Parse the HHMM integer returned by timePrompt
+    int h = newTimeInt / 100;
+    int min = newTimeInt % 100;
+    
+    // Apply the corrected date and time to the RTC.
+    // Calling adjust() automatically clears the hardware lostPower() flag.
+    CLOCK().getRTC().adjust(DateTime(y, m, d, h, min, 0));
+    
+    OLED().oledWord("Time Set");
+    delay(500);
+
+    // Restore the timeout state before continuing boot
+    noTimeout = previousTimeoutState;
   }
 }
 

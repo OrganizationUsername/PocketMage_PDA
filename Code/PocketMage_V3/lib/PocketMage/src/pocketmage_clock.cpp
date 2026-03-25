@@ -6,6 +6,7 @@
 //  dP     dP    dP     Y88888P' //
 
 #include "pocketmage.h"
+#include "globals.h"
 
 static constexpr const char* TAG = "CLOCK";
 
@@ -23,10 +24,10 @@ void setupClock(){
     ESP_LOGE(TAG, "Couldn't find RTC");
     delay(1000);
   }
-  // SET CLOCK IF NEEDED
-  if (SET_CLOCK_ON_UPLOAD || CLOCK().getRTC().lostPower()) {
-    CLOCK().setToCompileTimeUTC();
-  }
+
+  // Check if there was a power loss
+  checkRTCPowerLoss();
+
   CLOCK().getRTC().start();
   wireClock();
 }

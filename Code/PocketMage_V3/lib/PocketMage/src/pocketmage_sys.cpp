@@ -346,6 +346,7 @@ void PocketMage_INIT() {
   ESP_LOGD(TAG, "setup buzzer");
   if (!seamlessReboot)
     BZ().playJingle(Jingles::Startup);
+
 }
 
 // ===================== GLOBAL TEXT HELPERS =====================

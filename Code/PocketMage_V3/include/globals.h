@@ -65,6 +65,7 @@ void waitForKeypress(String message = "Press any button to continue...");
 void checkCrashState();
 String datePrompt(String defaultYYYYMMDD = "");
 int timePrompt(int defaultTime = -1);
+void checkRTCPowerLoss();
 #if !OTA_APP
 void saveEditingFile(); // OTA_APP: Remove saveEditingFile
 #endif
