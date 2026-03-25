@@ -37,52 +37,47 @@ void PocketmageOled::oledWord(String word, bool allowLarge, bool showInfo, Strin
   if (showInfo && bottomText == "") infoBar();
   else if (bottomText != "") {
     u8g2_.setFont(u8g2_font_5x7_tf);
-    u8g2_.drawStr((dw - u8g2_.getStrWidth(bottomText.c_str())) / 2, dh, bottomText.c_str());
+    u8g2_.drawUTF8((dw - u8g2_.getUTF8Width(bottomText.c_str())) / 2, dh, bottomText.c_str());
   }
 
+  // Changed all _tr fonts to _tf to include the extended UTF-8 character set
   if (allowLarge) {
-    /*u8g2_.setFont(u8g2_font_ncenB24_tr);
-    if (u8g2_.getStrWidth(word.c_str()) < dw) {
-      u8g2_.drawStr((dw - u8g2_.getStrWidth(word.c_str()))/2,16+12,word.c_str());
-      u8g2_.sendBuffer();
-      return;
-    }*/
-    u8g2_.setFont(u8g2_font_ncenB18_tr);
-    if (u8g2_.getStrWidth(word.c_str()) < dw) {
-      u8g2_.drawStr((dw - u8g2_.getStrWidth(word.c_str()))/2, 16+5, word.c_str());
+    u8g2_.setFont(u8g2_font_ncenB18_tf);
+    if (u8g2_.getUTF8Width(word.c_str()) < dw) {
+      u8g2_.drawUTF8((dw - u8g2_.getUTF8Width(word.c_str()))/2, 16+5, word.c_str());
       u8g2_.sendBuffer();
       return;
     }
   }
 
-  u8g2_.setFont(u8g2_font_ncenB14_tr);
-  if (u8g2_.getStrWidth(word.c_str()) < dw) {
-    u8g2_.drawStr((dw - u8g2_.getStrWidth(word.c_str()))/2, 16+3, word.c_str());
+  u8g2_.setFont(u8g2_font_ncenB14_tf);
+  if (u8g2_.getUTF8Width(word.c_str()) < dw) {
+    u8g2_.drawUTF8((dw - u8g2_.getUTF8Width(word.c_str()))/2, 16+3, word.c_str());
     u8g2_.sendBuffer();
     return;
   }
 
-  u8g2_.setFont(u8g2_font_ncenB12_tr);
-  if (u8g2_.getStrWidth(word.c_str()) < dw) {
-    u8g2_.drawStr((dw - u8g2_.getStrWidth(word.c_str()))/2, 16+2, word.c_str());
+  u8g2_.setFont(u8g2_font_ncenB12_tf);
+  if (u8g2_.getUTF8Width(word.c_str()) < dw) {
+    u8g2_.drawUTF8((dw - u8g2_.getUTF8Width(word.c_str()))/2, 16+2, word.c_str());
     u8g2_.sendBuffer();
     return;
   }
 
-  u8g2_.setFont(u8g2_font_ncenB10_tr);
-  if (u8g2_.getStrWidth(word.c_str()) < dw) {
-    u8g2_.drawStr((dw - u8g2_.getStrWidth(word.c_str()))/2, 16+1, word.c_str());
+  u8g2_.setFont(u8g2_font_ncenB10_tf);
+  if (u8g2_.getUTF8Width(word.c_str()) < dw) {
+    u8g2_.drawUTF8((dw - u8g2_.getUTF8Width(word.c_str()))/2, 16+1, word.c_str());
     u8g2_.sendBuffer();
     return;
   }
 
-  u8g2_.setFont(u8g2_font_ncenB08_tr);
-  if (u8g2_.getStrWidth(word.c_str()) < dw) {
-    u8g2_.drawStr((dw - u8g2_.getStrWidth(word.c_str()))/2, 16, word.c_str());
+  u8g2_.setFont(u8g2_font_ncenB08_tf);
+  if (u8g2_.getUTF8Width(word.c_str()) < dw) {
+    u8g2_.drawUTF8((dw - u8g2_.getUTF8Width(word.c_str()))/2, 16, word.c_str());
     u8g2_.sendBuffer();
     return;
   } else {
-    u8g2_.drawStr(dw - u8g2_.getStrWidth(word.c_str()), 16, word.c_str());
+    u8g2_.drawUTF8(dw - u8g2_.getUTF8Width(word.c_str()), 16, word.c_str());
     u8g2_.sendBuffer();
     return;
   }
@@ -93,14 +88,13 @@ void PocketmageOled::oledLine(String line, int input_pos, bool doProgressBar, St
   const uint16_t dw = u8g2_.getDisplayWidth();
   const uint16_t dh = u8g2_.getDisplayHeight();
   
-  uint8_t mcl = EINK().maxCharsPerLine();
-  uint8_t maxLength = mcl;
   String left = "";
   u8g2_.clearBuffer();
 
   //PROGRESS BAR
   if (doProgressBar && line.length() > 0) {
-    const uint16_t charWidth = strWidth(line);
+    // Fixed string measurement
+    const uint16_t charWidth = u8g2_.getUTF8Width(line.c_str());
 
     // Restored global display reference
     const uint8_t progress = map(charWidth, 0, display.width() - 5, 0, dw);
@@ -128,9 +122,9 @@ void PocketmageOled::oledLine(String line, int input_pos, bool doProgressBar, St
   // Display bottomMsg
   else {
     u8g2_.setFont(u8g2_font_5x7_tf);
-    u8g2_.drawStr(0, dh, bottomMsg.c_str());
+    u8g2_.drawUTF8(0, dh, bottomMsg.c_str());
 
-    // Draw FN/Shift indicator
+    // Draw FN/Shift indicator (Standard ASCII is fine here)
     int state = KB().getKeyboardState();
     switch (state) {
       case 1: //SHIFT
@@ -147,47 +141,51 @@ void PocketmageOled::oledLine(String line, int input_pos, bool doProgressBar, St
     }
   }
 
-  // DRAW LINE TEXT (unchanged)
-  u8g2_.setFont(u8g2_font_ncenB18_tr);
-  if (u8g2_.getStrWidth(line.c_str()) < (dw - 5)) {
+  // DRAW LINE TEXT (Upgraded to full UTF-8 Font and Draw routines)
+  u8g2_.setFont(u8g2_font_ncenB18_tf);
+  int lineWidth = u8g2_.getUTF8Width(line.c_str());
+
+  if (lineWidth < (dw - 5)) {
     if (line.length() > 0) {
       if (input_pos == 0) {
-        u8g2_.drawStr(0, 20, line.c_str());
+        u8g2_.drawUTF8(0, 20, line.c_str());
         u8g2_.drawVLine(0, 1, 22);
       } else if (input_pos == line.length()) {
-        u8g2_.drawStr(0, 20, line.c_str());
-        u8g2_.drawVLine(u8g2_.getStrWidth(line.c_str()) + 2, 1, 22);
+        u8g2_.drawUTF8(0, 20, line.c_str());
+        u8g2_.drawVLine(lineWidth + 2, 1, 22);
       } else {
         left = line.substring(0, input_pos);
-        u8g2_.drawStr(0, 20, line.c_str());
-        u8g2_.drawVLine(u8g2_.getStrWidth(left.c_str()), 1, 22);
+        u8g2_.drawUTF8(0, 20, line.c_str());
+        u8g2_.drawVLine(u8g2_.getUTF8Width(left.c_str()), 1, 22);
       }
     } else {
-      u8g2_.drawStr(0, 20, line.c_str());
+      u8g2_.drawUTF8(0, 20, line.c_str());
+      u8g2_.drawVLine(0, 1, 22); // Still draw the cursor when string is empty
     }
   } else {
     if (input_pos == 0) {
-      u8g2_.drawStr(0, 20, line.c_str());
+      u8g2_.drawUTF8(0, 20, line.c_str());
       u8g2_.drawVLine(0, 1, 22);
     } else if (input_pos == line.length()) {
       //show end of line, input scrolls left
-      u8g2_.drawStr(dw - 8 - u8g2_.getStrWidth(line.c_str()), 20, line.c_str());
+      u8g2_.drawUTF8(dw - 8 - lineWidth, 20, line.c_str());
       u8g2_.drawVLine(dw - 6, 1, 22);
     } else {
-      //calc cursor pos
+      //calc cursor pos using perfect UTF-8 string split math
       left = line.substring(0, input_pos);
-      int cursor_offset = u8g2_.getStrWidth(left.c_str());
+      int cursor_offset = u8g2_.getUTF8Width(left.c_str());
       int line_start = 0;
+      
       if (cursor_offset > (dw - 8) / 2) {
         //shift left
         line_start += ((dw - 8) / 2) - cursor_offset;
-        if (line_start + u8g2_.getStrWidth(line.c_str()) < dw - 8) {
+        if (line_start + lineWidth < dw - 8) {
           //shift back right
-          line_start += dw - 8 - (line_start + u8g2_.getStrWidth(line.c_str()));
+          line_start += dw - 8 - (line_start + lineWidth);
         }
         cursor_offset += line_start;
       }
-      u8g2_.drawStr(line_start, 20, line.c_str());
+      u8g2_.drawUTF8(line_start, 20, line.c_str());
       u8g2_.drawVLine(cursor_offset, 1, 22);
     }
   }
