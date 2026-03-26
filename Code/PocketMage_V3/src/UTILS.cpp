@@ -355,19 +355,21 @@ String textPrompt(String promptText, String prefix) {
       }
       else if (inchar == 8) {
         if (currentLine.length() > 0 && cursor_pos != 0) {
-          if (cursor_pos == currentLine.length()) {
-            currentLine.remove(currentLine.length() - 1, 1);
-          } else {
-            currentLine.remove(cursor_pos - 1, 1);
-          }
-          cursor_pos--;
+          int old_cursor = cursor_pos;
+          do { cursor_pos--; } while (cursor_pos > 0 && (currentLine[cursor_pos] & 0xC0) == 0x80);
+          int bytesToDelete = old_cursor - cursor_pos;
+          currentLine.remove(cursor_pos, bytesToDelete);
         }
       }
       else if (inchar == 19) {
-        if (cursor_pos > 0) cursor_pos--;
+        if (cursor_pos > 0) {
+          do { cursor_pos--; } while (cursor_pos > 0 && (currentLine[cursor_pos] & 0xC0) == 0x80);
+        }
       }
       else if (inchar == 21) {
-        if (cursor_pos < currentLine.length()) cursor_pos++;
+        if (cursor_pos < currentLine.length()) {
+          do { cursor_pos++; } while (cursor_pos < currentLine.length() && (currentLine[cursor_pos] & 0xC0) == 0x80);
+        }
       }
       else if (inchar == 20) {
       }

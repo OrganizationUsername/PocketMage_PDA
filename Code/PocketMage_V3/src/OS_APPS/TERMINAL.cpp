@@ -2,6 +2,41 @@
 #include <globals.h>
 #include "wrench.h"
 
+// --- UTF-8 Helpers ---
+static inline uint16_t decodeUTF8(const char* str, uint16_t* index, uint16_t len) {
+  if (*index >= len) return 0;
+  uint8_t c = str[*index];
+  (*index)++;
+  
+  if (c < 0x80) return c; // Standard ASCII
+  if ((c & 0xE0) == 0xC0) { // 2-byte sequence
+    if (*index >= len) return c; // Incomplete, fallback safely
+    uint8_t c2 = str[*index]; (*index)++;
+    return ((c & 0x1F) << 6) | (c2 & 0x3F);
+  }
+  if ((c & 0xF0) == 0xE0) { // 3-byte sequence
+    if (*index + 1 >= len) return c;
+    uint8_t c2 = str[*index]; (*index)++;
+    uint8_t c3 = str[*index]; (*index)++;
+    return ((c & 0x0F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F);
+  }
+  return c; // Fallback
+}
+
+static inline uint8_t mapUnicodeToFontIndex(uint16_t unicode) {
+  if (unicode < 0x80) return unicode;
+  if (unicode >= 0x00A0 && unicode <= 0x00FF) return unicode - 0x20;
+  return 0x7F; // Replacement char
+}
+
+static void printUTF8ToEink(const String& s) {
+  uint16_t i = 0;
+  while (i < s.length()) {
+    uint16_t unicode = decodeUTF8(s.c_str(), &i, s.length());
+    display.write(mapUnicodeToFontIndex(unicode));
+  }
+}
+
 // General
 enum TERMINAL_functions { PROMPT, POTION };
 TERMINAL_functions CurrentTERMfunc = PROMPT;
@@ -44,8 +79,8 @@ void potionScrollPreview() {
         u8g2.setDrawColor(1);
 
       u8g2.setFont(u8g2_font_5x7_tf);
-      u8g2.drawStr(0, y, lineNum.c_str());
-      u8g2.drawStr(35, y, potionLines[i].c_str());
+      u8g2.drawUTF8(0, y, lineNum.c_str());
+      u8g2.drawUTF8(35, y, potionLines[i].c_str());
 
       y += 8;
     }
@@ -71,8 +106,8 @@ void potionScrollPreview() {
         u8g2.setDrawColor(1);
 
       u8g2.setFont(u8g2_font_5x7_tf);
-      u8g2.drawStr(0, y, lineNum.c_str());
-      u8g2.drawStr(35, y, potionLines[i].c_str());
+      u8g2.drawUTF8(0, y, lineNum.c_str());
+      u8g2.drawUTF8(35, y, potionLines[i].c_str());
 
       y += 8;
     }
@@ -167,7 +202,7 @@ void updateTerminalDisp() {
       display.setTextColor(GxEPD_WHITE);
       display.setFont(&FreeMonoBold9pt7b);
       display.setCursor(5, y);
-      display.print(s);
+      printUTF8ToEink(s);
       y += 16;
     }
   } else {
@@ -179,7 +214,7 @@ void updateTerminalDisp() {
       display.setTextColor(GxEPD_WHITE);
       display.setFont(&FreeMonoBold9pt7b);
       display.setCursor(5, y);
-      display.print(s);
+      printUTF8ToEink(s);
       y -= 16;
 
       display.setTextColor(GxEPD_BLACK);
@@ -223,11 +258,10 @@ void funcSelect(String command) {
   // Add inputted command to terminal outputs
   String totalMsg = currentDir + ">" + command;
   if (totalMsg.length() > 28)
-    totalMsg = totalMsg.substring(0, 28);
+    totalMsg = totalMsg.substring(0, 28); // Standard substring is OK for simple paths
   terminalOutputs.push_back(totalMsg);
 
   command.toLowerCase();
-
 
   // Clear command window
   if (command == "clear") {
@@ -930,7 +964,7 @@ void wr_inkText(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void*
   }
   
   display.setCursor(x_origin, y_origin);
-  display.print(text);
+  printUTF8ToEink(text);
 }
 
 // ----- OLED Display ----- //
@@ -1016,7 +1050,7 @@ void wr_oledText(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void
       break;
   }
   
-  u8g2.drawStr(x_origin, y_origin, text);
+  u8g2.drawUTF8(x_origin, y_origin, text);
 
   u8g2.setDrawColor(1);
 }
@@ -1226,12 +1260,12 @@ void processKB_TERMINAL() {
         // BKSP Recieved
         else if (inchar == 8) {
           if (potionLines[currentPotionLine].length() > 0 && cursor_pos != 0) {
-            if (cursor_pos == potionLines[currentPotionLine].length()) {
-              potionLines[currentPotionLine].remove(potionLines[currentPotionLine].length() - 1, 1);
-            } else {
-              potionLines[currentPotionLine].remove(cursor_pos - 1, 1);
-            }
-            cursor_pos--;
+            uint16_t old_cursor = cursor_pos;
+            // Safely leap over UTF-8 continuation bytes
+            do { cursor_pos--; } while (cursor_pos > 0 && (potionLines[currentPotionLine][cursor_pos] & 0xC0) == 0x80);
+            
+            int bytesToDelete = old_cursor - cursor_pos;
+            potionLines[currentPotionLine].remove(cursor_pos, bytesToDelete);
           }
           else if (potionLines[currentPotionLine].length() == 0) {
             if (potionLines.size() > 1) {
@@ -1250,13 +1284,13 @@ void processKB_TERMINAL() {
         // LEFT
         else if (inchar == 19) {
           if (cursor_pos > 0) {
-            cursor_pos--;
+            do { cursor_pos--; } while (cursor_pos > 0 && (potionLines[currentPotionLine][cursor_pos] & 0xC0) == 0x80);
           }
         }
         // RIGHT
         else if (inchar == 21) {
           if (cursor_pos < potionLines[currentPotionLine].length()) {
-            cursor_pos++;
+            do { cursor_pos++; } while (cursor_pos < potionLines[currentPotionLine].length() && (potionLines[currentPotionLine][cursor_pos] & 0xC0) == 0x80);
           }
         }
         // CENTER
@@ -1324,6 +1358,7 @@ void processKB_TERMINAL() {
         // TAB, SHIFT+TAB / FN+TAB, FN+SHIFT+TAB
         else if (inchar == 9 || inchar == 14) {
           potionLines[currentPotionLine] = "  " + potionLines[currentPotionLine];
+          cursor_pos += 2;
         } 
         else {
           // split line at cursor_pos
@@ -1404,7 +1439,7 @@ void einkHandler_TERMINAL() {
             display.setCursor(5, y);
             display.print("[" + lineNum + "]");
             display.setCursor(35, y);
-            display.print(s);
+            printUTF8ToEink(s);
             y += 10;
           }
         } 
@@ -1430,7 +1465,7 @@ void einkHandler_TERMINAL() {
               display.setCursor(5, y);
               display.print("[" + lineNum + "]");
               display.setCursor(35, y);
-              display.print(s);
+              printUTF8ToEink(s);
               y += 10;
             }
           }
@@ -1455,7 +1490,7 @@ void einkHandler_TERMINAL() {
               display.setCursor(5, y);
               display.print("[" + lineNum + "]");
               display.setCursor(35, y);
-              display.print(s);
+              printUTF8ToEink(s);
               y += 10;
             }
           }
