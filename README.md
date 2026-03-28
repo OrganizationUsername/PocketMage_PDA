@@ -17,9 +17,9 @@
 # [Getting Started]
 **Helpful Resources:**
 
-[FAQ](https://github.com/ashtf8/PocketMage_PDA/tree/main/Docs/FAQ)
+[FAQ](https://github.com/ashtf8/PocketMage_PDA/tree/main/Docs/Getting%20Started/FAQ)
 
-[Tutorials](https://github.com/ashtf8/PocketMage_PDA/tree/main/Docs/Tutorials)
+[Tutorials](https://github.com/ashtf8/PocketMage_PDA/tree/main/Docs/Getting%20Started/Tutorials)
 
 [PocketMage Command & Keystroke Manual](https://github.com/ashtf8/PocketMage_PDA/tree/main/Docs/Getting%20Started/Command%20Manual)
 
