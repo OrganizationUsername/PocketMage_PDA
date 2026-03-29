@@ -84,6 +84,8 @@ void PocketmageOled::oledWord(String word, bool allowLarge, bool showInfo, Strin
 }
 
 void PocketmageOled::sysMessage(String msg, int showTime) {
+  pocketmage::setCpuSpeed(240);
+
   u8g2_.clearBuffer();
   const uint16_t dw = u8g2_.getDisplayWidth();
   const uint16_t dh = u8g2_.getDisplayHeight();
@@ -125,25 +127,27 @@ void PocketmageOled::sysMessage(String msg, int showTime) {
   }
 
   // --- 2. Raise message animation ---
-  for (int y = dh; y > 1; y--) {
+  for (int y = dh; y > 0; y-=2) {
     u8g2_.clearBuffer();
     u8g2_.drawUTF8(x_offset, y + y_offset, msg.c_str());
     u8g2_.drawRFrame(0, y, dw, dh + 16, 10);
     u8g2_.sendBuffer();
-    //delay(5);
+    delay(5);
   }
 
   // --- 3. Hold ---
-  delay(showTime);
+  vTaskDelay(pdMS_TO_TICKS(showTime));
 
   // --- 4. Lower message animation ---
-  for (int y = 0; y < dh; y++) {
+  for (int y = 0; y < dh; y+=2) {
     u8g2_.clearBuffer();
     u8g2_.drawUTF8(x_offset, y + y_offset, msg.c_str());
     u8g2_.drawRFrame(0, y, dw, dh + 16, 10);
     u8g2_.sendBuffer();
-    //delay(5);
+    delay(5);
   }
+
+  if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 }
 
 void PocketmageOled::oledLine(String line, int input_pos, bool doProgressBar, String bottomMsg) {

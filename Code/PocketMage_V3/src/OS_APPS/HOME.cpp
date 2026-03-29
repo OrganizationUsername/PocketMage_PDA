@@ -76,19 +76,16 @@ String commandSelect(String command) {
     String numStr = command.substring(6);
     int sides = numStr.toInt();
     if (sides < 1) {
-      OLED().oledWord("Please enter a valid number");
-      delay(2000);
+      OLED().sysMessage("Invalid Number",1000);
     } 
     else if (sides == 1) {
-      OLED().oledWord("D1: you rolled a 1, duh!");
-      delay(2000);
+      OLED().sysMessage("D1: you rolled a 1, duh!",2000);
     }
     else {
       int roll = (esp_random() % sides) + 1;
-      if (roll == sides)  OLED().oledWord("D" + String(sides) + ": " + String(roll) + "!!!");
-      else if (roll == 1) OLED().oledWord("D" + String(sides) + ": " + String(roll) + " :(");
-      else                OLED().oledWord("D" + String(sides) + ": " + String(roll));
-      delay(3000);
+      if (roll == sides)  OLED().sysMessage("D" + String(sides) + ": " + String(roll) + "!!!",3000);
+      else if (roll == 1) OLED().sysMessage("D" + String(sides) + ": " + String(roll) + " :(",3000);
+      else                OLED().sysMessage("D" + String(sides) + ": " + String(roll),3000);
       KB().setKeyboardState(NORMAL);
     }
   }
@@ -163,8 +160,7 @@ String commandSelect(String command) {
     JOURNAL_INIT();
   }
   else if (command == "version" || command == "ver") {
-    OLED().oledWord("PMOS: " + String(OS_VERSION_STR));
-    delay(2000);
+    OLED().sysMessage("PMOS: " + String(OS_VERSION_STR),2000);   
   }
   /////////////////////////////
   else if (command == "i farted") {
@@ -200,8 +196,7 @@ String commandSelect(String command) {
   }
 
   if (returnText != "") {
-    OLED().oledWord(returnText);
-    delay(2000);
+    OLED().sysMessage(returnText,2000);
   }
 
   return returnText;
@@ -385,7 +380,8 @@ void processKB_HOME() {
     case HOME_HOME:
       KB().setKeyboardState(NORMAL);
       command = textPrompt();
-      if (command != "_EXIT_") commandSelect(command);
+      if (command == "_RETURN_") return;
+      else if (command != "_EXIT_") commandSelect(command);
       else newState = true;
       break;
 

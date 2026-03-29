@@ -261,8 +261,7 @@ void updateBattState() {
     bool low;
     if (!PowerSystem.isBatteryLow(low)) {
       if (low) {
-        OLED().oledWord("Battery Critial!");
-        delay(1000);
+        OLED().sysMessage("Battery Critical!",1000);
 
 #if !OTA_APP
         saveEditingFile();
@@ -331,6 +330,10 @@ String textPrompt(String promptText, String prefix) {
 
       // HANDLE INPUTS
       if (inchar == 0) ;
+      else if (inchar == 23) {
+        currentLine = "_RETURN_";
+        break;
+      }
       else if (inchar == 13) {
         cursor_pos = 0;
         break;
@@ -1003,8 +1006,7 @@ void checkRTCPowerLoss() {
     // Calling adjust() automatically clears the hardware lostPower() flag.
     CLOCK().getRTC().adjust(DateTime(y, m, d, h, min, 0));
     
-    OLED().oledWord("Time Set");
-    delay(500);
+    OLED().sysMessage("Time Set",500);
 
     // Restore the timeout state before continuing boot
     noTimeout = previousTimeoutState;

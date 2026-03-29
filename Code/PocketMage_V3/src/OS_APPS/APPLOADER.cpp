@@ -797,8 +797,7 @@ void processKB_APPLOADER() {
           installAppTarToOtaAsync(relName.c_str(), selectedSlot);
           CurrentAppLoaderState = INSTALLING;
         } else {
-          OLED().oledWord("Not a .tar file!");
-          vTaskDelay(pdMS_TO_TICKS(2000));
+          OLED().sysMessage("Not a .tar file!",2000);
           CurrentAppLoaderState = MENU;
         }
       }
@@ -810,12 +809,11 @@ void processKB_APPLOADER() {
       } else {
         vTaskDelay(pdMS_TO_TICKS(500));
         if (g_installFailed) {
-          OLED().oledWord("Install failed!");
+          OLED().sysMessage("Install Failed!",2000);
         } 
         else {
-          OLED().oledWord("Install complete!");
+          OLED().sysMessage("Install Complete!",2000);
         }
-        vTaskDelay(pdMS_TO_TICKS(2000));
         newState = true;
         CurrentAppLoaderState = MENU;
       }

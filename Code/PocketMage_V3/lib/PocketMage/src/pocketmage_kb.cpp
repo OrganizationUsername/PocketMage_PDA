@@ -863,8 +863,8 @@ char PocketmageKB::updateKeypress() {
                         else if (cycleIndex == 9) TERMINAL_INIT();
                         else if (cycleIndex == 10) APPLOADER_INIT();
                         // If 0 ("cancel"), do nothing.
-                        
-                        return 0; // Return 0 so we don't accidentally type a char into the newly opened app!
+                        if (cycleIndex == 0) return 0;
+                        else return 23; // Return 23 so we can tell the loop to break
                     }
                     else if (CurrentAppState == USB_APP) {
                       OLED().sysMessage("Please close USB connection",2000);
@@ -923,7 +923,7 @@ char PocketmageKB::updateKeypress() {
                   else if (nestedBaseC == 'N') { activeCycle = cyc_N; activeCycleLen = 2; }
                   else if (nestedBaseC == 'c') { activeCycle = cyc_c; activeCycleLen = 2; }
                   else if (nestedBaseC == 'C') { activeCycle = cyc_C; activeCycleLen = 2; }
-                  else if (nestedBaseC == 20)  { activeCycle = cyc_appSwitch; activeCycleLen = 11; }
+                  else if (nestedBaseC == 20 || nestedBaseC == 7)  { activeCycle = cyc_appSwitch; activeCycleLen = 11; }
                   else matched = false;
 
                   if (matched) {

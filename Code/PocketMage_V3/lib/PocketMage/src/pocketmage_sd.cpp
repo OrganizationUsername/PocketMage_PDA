@@ -679,8 +679,7 @@ void PocketmageSDMMC::renFile(String oldFile, String newFile) {
       if (!newFile.startsWith("/"))
       newFile = "/" + newFile;
       PM_SDMMC().renameFile(SD_MMC, oldFile.c_str(), newFile.c_str());
-      OLED().oledWord(oldFile + " -> " + newFile);
-      delay(1000);
+      OLED().sysMessage(oldFile + " -> " + newFile ,1000);
 
       // Update MetaData
       PM_SDMMC().renMetadata(oldFile, newFile);
@@ -747,8 +746,7 @@ void PocketmageSDMMC::renMetadata(String oldPath, String newPath) {
 } 
 void PocketmageSDMMC::copyFile(String oldFile, String newFile) {
   if (PM_SDMMC().getNoSD()) {
-      OLED().oledWord("COPY FAILED - No SD!");
-      delay(5000);
+      OLED().sysMessage("COPY FAILED - No SD!",5000);
       return;
   } else {
       SDActive = true;
@@ -778,8 +776,7 @@ void PocketmageSDMMC::copyFile(String oldFile, String newFile) {
 } 
 void PocketmageSDMMC::appendToFile(String path, String inText) {
   if (PM_SDMMC().getNoSD()) {
-      OLED().oledWord("OP FAILED - No SD!");
-      delay(5000);
+      OLED().sysMessage("OP FAILED - No SD!",5000);
       return;
   } else {
       SDActive = true;
@@ -804,8 +801,7 @@ void PocketmageSDMMC::appendToFile(String path, String inText) {
 // Low-Level SDMMC Operations switch to using internal fs::FS*
 void PocketmageSDMMC::listDir(fs::FS &fs, const char *dirname) {
   if (noSD_) {
-    OLED().oledWord("OP FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("OP FAILED - No SD!",5000);
     return;
   }
   else {
@@ -861,8 +857,7 @@ void PocketmageSDMMC::listDir(fs::FS &fs, const char *dirname) {
 }
 void PocketmageSDMMC::readFile(fs::FS &fs, const char *path) {
   if (noSD_) {
-    OLED().oledWord("OP FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("OP FAILED - No SD!",5000);
     return;
   }
   else {
@@ -886,8 +881,7 @@ void PocketmageSDMMC::readFile(fs::FS &fs, const char *path) {
 }
 String PocketmageSDMMC::readFileToString(fs::FS &fs, const char *path) {
   if (noSD_) {
-    OLED().oledWord("OP FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("OP FAILED - No SD!",5000);
     return "";
   }
   else { 
@@ -902,8 +896,7 @@ String PocketmageSDMMC::readFileToString(fs::FS &fs, const char *path) {
     if (!file || file.isDirectory()) {
       noTimeout = prevTimeout;
       ESP_LOGE(tag, "Failed to open file for reading: %s", path);
-      OLED().oledWord("Load Failed");
-      delay(500);
+      OLED().sysMessage("Load Failed",500);
       return "";  // Return an empty string on failure
     }
 
@@ -918,8 +911,7 @@ String PocketmageSDMMC::readFileToString(fs::FS &fs, const char *path) {
 }
 void PocketmageSDMMC::writeFile(fs::FS &fs, const char *path, const char *message) {
   if (noSD_) {
-    OLED().oledWord("OP FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("OP FAILED - No SD!",5000);
     return;
   }
   else {
@@ -948,8 +940,7 @@ void PocketmageSDMMC::writeFile(fs::FS &fs, const char *path, const char *messag
 }
 void PocketmageSDMMC::appendFile(fs::FS &fs, const char *path, const char *message) {
   if (noSD_) {
-    OLED().oledWord("OP FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("OP FAILED - No SD!",5000);
     return;
   }
   else {
@@ -978,8 +969,7 @@ void PocketmageSDMMC::appendFile(fs::FS &fs, const char *path, const char *messa
 }
 void PocketmageSDMMC::renameFile(fs::FS &fs, const char *path1, const char *path2) {
   if (noSD_) {
-    OLED().oledWord("OP FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("OP FAILED - No SD!",5000);
     return;
   }
   else {
@@ -1001,8 +991,7 @@ void PocketmageSDMMC::renameFile(fs::FS &fs, const char *path1, const char *path
 }
 void PocketmageSDMMC::deleteFile(fs::FS &fs, const char *path) {
   if (noSD_) {
-    OLED().oledWord("OP FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("OP FAILED - No SD!",5000);
     return;
   }
   else {
@@ -1023,8 +1012,7 @@ void PocketmageSDMMC::deleteFile(fs::FS &fs, const char *path) {
 }
 bool PocketmageSDMMC::readBinaryFile(const char* path, uint8_t* buf, size_t len) {
   if (noSD_) {
-      OLED().oledWord("OP FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("OP FAILED - No SD!",5000);
     return false;
   }
 
@@ -1070,8 +1058,7 @@ PocketmageSDSPI& PM_SDSPI() { return pm_sdspi; }
 
 void PocketmageSDSPI::saveFile() {
   if (getNoSD()) {
-    OLED().oledWord("SAVE FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("SAVE FAILED - No SD!",5000);
     return;
   }
 
@@ -1110,8 +1097,7 @@ void PocketmageSDSPI::writeMetadata(const String& path) {
 
   File file = global_fs->open(path);
   if (!file || file.isDirectory()) {
-    OLED().oledWord("META WRITE ERR");
-    delay(1000);
+    OLED().sysMessage("META WRITE ERR",1000);
     ESP_LOGE(TAG, "Invalid file for metadata: %s", path.c_str());
     return;
   }
@@ -1180,8 +1166,8 @@ void PocketmageSDSPI::writeMetadata(const String& path) {
 }
 void PocketmageSDSPI::loadFile(bool showOLED) {
   if (getNoSD()) {
-    OLED().oledWord("LOAD FAILED - No SD!");
-    delay(5000);
+
+    OLED().sysMessage("LOAD FAILED - No SD!",5000);
     return;
   }
 
@@ -1216,8 +1202,7 @@ void PocketmageSDSPI::loadFile(bool showOLED) {
 }
 void PocketmageSDSPI::delFile(String fileName) {
   if (PM_SDSPI().getNoSD()) {
-    OLED().oledWord("DELETE FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("DELETE FAILED - No SD!",5000);
     return;
   } else {
     SDActive = true;
@@ -1287,8 +1272,7 @@ void PocketmageSDSPI::deleteMetadata(String path) {
 }
 void PocketmageSDSPI::renFile(String oldFile, String newFile) {
   if (PM_SDSPI().getNoSD()) {
-    OLED().oledWord("RENAME FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("RENAME FAILED - No SD!",5000);
     return;
   } else {
     SDActive = true;
@@ -1303,15 +1287,13 @@ void PocketmageSDSPI::renFile(String oldFile, String newFile) {
       newFile = "/" + newFile;
 
     if (global_fs->rename(oldFile.c_str(), newFile.c_str())) {
-      OLED().oledWord(oldFile + " -> " + newFile);
-      delay(1000);
+      OLED().sysMessage(oldFile + " -> " + newFile,1000);
 
       // Update metadata
       PM_SDSPI().renMetadata(oldFile, newFile);
     } else {
       ESP_LOGE(TAG, "Rename failed: %s -> %s", oldFile.c_str(), newFile.c_str());
-      OLED().oledWord("RENAME FAILED");
-      delay(1000);
+      OLED().sysMessage("RENAME FAILED",1000);
     }
 
     keypad.enableInterrupts();
@@ -1376,8 +1358,7 @@ void PocketmageSDSPI::renMetadata(String oldPath, String newPath) {
 }
 void PocketmageSDSPI::copyFile(String oldFile, String newFile) {
   if (PM_SDSPI().getNoSD()) {
-    OLED().oledWord("COPY FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("COPY FAILED - No SD!",5000);
     return;
   } else {
     SDActive = true;
@@ -1433,8 +1414,7 @@ void PocketmageSDSPI::copyFile(String oldFile, String newFile) {
 }
 void PocketmageSDSPI::appendToFile(String path, String inText) {
   if (getNoSD()) {
-    OLED().oledWord("OP FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("OP FAILED - No SD!",5000);
     return;
   }
 
@@ -1475,8 +1455,7 @@ void PocketmageSDSPI::appendToFile(String path, String inText) {
 // Low-Level SDMMC Operations switch to using internal fs::FS*
 void PocketmageSDSPI::listDir(fs::FS &fs, const char *dirname) {
   if (noSD_) {
-    OLED().oledWord("OP FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("OP FAILED - No SD!",5000);
     return;
   }
   else {
@@ -1532,8 +1511,7 @@ void PocketmageSDSPI::listDir(fs::FS &fs, const char *dirname) {
 }
 void PocketmageSDSPI::readFile(fs::FS &fs, const char *path) {
   if (noSD_) {
-    OLED().oledWord("OP FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("OP FAILED - No SD!",5000);
     return;
   }
   else {
@@ -1557,8 +1535,7 @@ void PocketmageSDSPI::readFile(fs::FS &fs, const char *path) {
 }
 String PocketmageSDSPI::readFileToString(fs::FS &fs, const char *path) {
   if (noSD_) {
-    OLED().oledWord("OP FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("OP FAILED - No SD!",5000);
     return "";
   }
   else { 
@@ -1573,8 +1550,7 @@ String PocketmageSDSPI::readFileToString(fs::FS &fs, const char *path) {
     if (!file || file.isDirectory()) {
       noTimeout = prevTimeout;
       ESP_LOGE(tag, "Failed to open file for reading: %s", path);
-      OLED().oledWord("Load Failed");
-      delay(500);
+      OLED().sysMessage("LOAD FAILED",500);
       return "";  // Return an empty string on failure
     }
 
@@ -1589,8 +1565,7 @@ String PocketmageSDSPI::readFileToString(fs::FS &fs, const char *path) {
 }
 void PocketmageSDSPI::writeFile(fs::FS &fs, const char *path, const char *message) {
   if (noSD_) {
-    OLED().oledWord("OP FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("OP FAILED - No SD!",5000);
     return;
   }
   else {
@@ -1619,8 +1594,7 @@ void PocketmageSDSPI::writeFile(fs::FS &fs, const char *path, const char *messag
 }
 void PocketmageSDSPI::appendFile(fs::FS &fs, const char *path, const char *message) {
   if (noSD_) {
-    OLED().oledWord("OP FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("OP FAILED - No SD!",5000);
     return;
   }
   else {
@@ -1649,8 +1623,7 @@ void PocketmageSDSPI::appendFile(fs::FS &fs, const char *path, const char *messa
 }
 void PocketmageSDSPI::renameFile(fs::FS &fs, const char *path1, const char *path2) {
   if (noSD_) {
-    OLED().oledWord("OP FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("OP FAILED - No SD!",5000);
     return;
   }
   else {
@@ -1672,8 +1645,7 @@ void PocketmageSDSPI::renameFile(fs::FS &fs, const char *path1, const char *path
 }
 void PocketmageSDSPI::deleteFile(fs::FS &fs, const char *path) {
   if (noSD_) {
-    OLED().oledWord("OP FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("OP FAILED - No SD!",5000);
     return;
   }
   else {
@@ -1694,8 +1666,7 @@ void PocketmageSDSPI::deleteFile(fs::FS &fs, const char *path) {
 }
 bool PocketmageSDSPI::readBinaryFile(const char* path, uint8_t* buf, size_t len) {
   if (noSD_) {
-    OLED().oledWord("OP FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("OP FAILED - No SD!",5000);
     return false;
   }
 
