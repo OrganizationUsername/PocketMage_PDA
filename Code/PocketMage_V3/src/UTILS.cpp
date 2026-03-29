@@ -459,9 +459,69 @@ String textPrompt(String promptText, String prefix) {
 
 int boolPrompt(String promptText) {
   KB().setKeyboardState(NORMAL);
-  OLED().oledWord(promptText + " (y/n)");
-  unsigned long lastSystemTime = CLOCK().getPrevTimeMillis();
+  pocketmage::setCpuSpeed(240); // Boost clock for smooth animation
 
+  String msg = promptText + " (y/n)";
+  u8g2.clearBuffer();
+  const uint16_t dw = u8g2.getDisplayWidth();
+  const uint16_t dh = u8g2.getDisplayHeight();
+  
+  int y_offset = 0;
+  int x_offset = 0;
+  const uint8_t* activeFont;
+
+  // --- 1. Find the largest font that fits and calculate offsets ---
+  u8g2.setFont(u8g2_font_ncenB14_tf);
+  if (u8g2.getUTF8Width(msg.c_str()) < dw-8) {
+    y_offset = 16 + 3 + 5;
+    x_offset = (dw - u8g2.getUTF8Width(msg.c_str())) / 2;
+    activeFont = u8g2_font_ncenB14_tf;
+  } 
+  else {
+    u8g2.setFont(u8g2_font_ncenB12_tf);
+    if (u8g2.getUTF8Width(msg.c_str()) < dw-8) {
+      y_offset = 16 + 2 + 5;
+      x_offset = (dw - u8g2.getUTF8Width(msg.c_str())) / 2;
+      activeFont = u8g2_font_ncenB12_tf;
+    } 
+    else {
+      u8g2.setFont(u8g2_font_ncenB10_tf);
+      if (u8g2.getUTF8Width(msg.c_str()) < dw-8) {
+        y_offset = 16 + 1 + 5;
+        x_offset = (dw - u8g2.getUTF8Width(msg.c_str())) / 2;
+        activeFont = u8g2_font_ncenB10_tf;
+      } 
+      else {
+        u8g2.setFont(u8g2_font_ncenB08_tf);
+        if (u8g2.getUTF8Width(msg.c_str()) < dw-8) {
+          y_offset = 16 + 5;
+          x_offset = (dw - u8g2.getUTF8Width(msg.c_str())) / 2;
+        } 
+        else {
+          y_offset = 16 + 5;
+          x_offset = dw - u8g2.getUTF8Width(msg.c_str());
+        }
+        activeFont = u8g2_font_ncenB08_tf;
+      }
+    }
+  }
+
+  // --- 2. Slide Up Animation ---
+  for (int y = dh; y > 0; y-=2) {
+    u8g2.clearBuffer();
+    u8g2.setFont(activeFont);
+    u8g2.drawUTF8(x_offset, y + y_offset, msg.c_str());
+    u8g2.drawRFrame(0, y, dw, dh + 16, 10);
+    u8g2.sendBuffer();
+    delay(5);
+  }
+
+  if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+
+  unsigned long lastSystemTime = CLOCK().getPrevTimeMillis();
+  int retVal = -1;
+
+  // --- 3. Input Loop ---
   for (;;) {
     #if !OTA_APP 
       if (!noTimeout)  checkTimeout();
@@ -470,18 +530,20 @@ int boolPrompt(String promptText) {
 
     // Set timeout
     CLOCK().setPrevTimeMillis(millis());
-
     updateBattState();
 
     // Redraw if background tasks overwrite the screen
     unsigned long currentSystemTime = CLOCK().getPrevTimeMillis();
     if (currentSystemTime > lastSystemTime) {
         lastSystemTime = currentSystemTime;
-        OLED().oledWord(promptText + " (y/n)"); 
+        u8g2.clearBuffer();
+        u8g2.setFont(activeFont);
+        u8g2.drawUTF8(x_offset, y_offset, msg.c_str());
+        u8g2.drawRFrame(0, 0, dw, dh + 16, 10);
+        u8g2.sendBuffer();
     }
 
     int currentMillis = millis();
-
     if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {
       char inchar = KB().updateKeypress();
 
@@ -490,16 +552,37 @@ int boolPrompt(String promptText) {
       }
 
       if (inchar == 'y' || inchar == 'Y') {
-        return 1;
+        retVal = 1;
+        break;
       }
       else if (inchar == 'n' || inchar == 'N') {
-        return 0;
+        retVal = 0;
+        break;
+      }
+      else if (inchar == 23) { // App Switcher Kill Signal
+        retVal = 0; // Default to 'no' on cancel
+        break;
       }
     }
 
     vTaskDelay(pdMS_TO_TICKS(10));
     yield();
   }
+
+  pocketmage::setCpuSpeed(240); // Boost clock for exit animation
+
+  // --- 4. Slide Down Animation ---
+  for (int y = 0; y <= dh; y+=2) {
+    u8g2.clearBuffer();
+    u8g2.setFont(activeFont);
+    u8g2.drawUTF8(x_offset, y + y_offset, msg.c_str());
+    u8g2.drawRFrame(0, y, dw, dh + 16, 10);
+    u8g2.sendBuffer();
+    delay(5);
+  }
+
+  if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+  return retVal;
 }
 
 int timePrompt(int defaultTime) {
@@ -891,9 +974,77 @@ String datePrompt(String defaultYYYYMMDD) {
 
 void waitForKeypress(String message) {
   KB().setKeyboardState(NORMAL); 
-  OLED().oledWord(message, false, false, "Press any key to continue...");
+  pocketmage::setCpuSpeed(240); // Boost clock for smooth animation
+
+  String msg = message;
+  String bottomMsg = "Press any key to continue...";
+  
+  u8g2.clearBuffer();
+  const uint16_t dw = u8g2.getDisplayWidth();
+  const uint16_t dh = u8g2.getDisplayHeight();
+  
+  int y_offset = 0;
+  int x_offset = 0;
+  const uint8_t* activeFont;
+
+  // --- 1. Find the largest font that fits and calculate offsets ---
+  u8g2.setFont(u8g2_font_ncenB14_tf);
+  if (u8g2.getUTF8Width(msg.c_str()) < dw) {
+    y_offset = 16 + 3;
+    x_offset = (dw - u8g2.getUTF8Width(msg.c_str())) / 2;
+    activeFont = u8g2_font_ncenB14_tf;
+  } 
+  else {
+    u8g2.setFont(u8g2_font_ncenB12_tf);
+    if (u8g2.getUTF8Width(msg.c_str()) < dw) {
+      y_offset = 16 + 2;
+      x_offset = (dw - u8g2.getUTF8Width(msg.c_str())) / 2;
+      activeFont = u8g2_font_ncenB12_tf;
+    } 
+    else {
+      u8g2.setFont(u8g2_font_ncenB10_tf);
+      if (u8g2.getUTF8Width(msg.c_str()) < dw) {
+        y_offset = 16 + 1;
+        x_offset = (dw - u8g2.getUTF8Width(msg.c_str())) / 2;
+        activeFont = u8g2_font_ncenB10_tf;
+      } 
+      else {
+        u8g2.setFont(u8g2_font_ncenB08_tf);
+        if (u8g2.getUTF8Width(msg.c_str()) < dw) {
+          y_offset = 16;
+          x_offset = (dw - u8g2.getUTF8Width(msg.c_str())) / 2;
+        } 
+        else {
+          y_offset = 16;
+          x_offset = dw - u8g2.getUTF8Width(msg.c_str());
+        }
+        activeFont = u8g2_font_ncenB08_tf;
+      }
+    }
+  }
+
+  // --- 2. Slide Up Animation ---
+  for (int y = dh; y > 0; y-=2) {
+    u8g2.clearBuffer();
+    
+    // Draw Main Message
+    u8g2.setFont(activeFont);
+    u8g2.drawUTF8(x_offset, y + y_offset, msg.c_str());
+    
+    // Draw Bottom Sub-Message
+    u8g2.setFont(u8g2_font_5x7_tf);
+    u8g2.drawUTF8((dw - u8g2.getUTF8Width(bottomMsg.c_str())) / 2, y + dh - 2, bottomMsg.c_str());
+    
+    u8g2.drawRFrame(0, y, dw, dh + 16, 10);
+    u8g2.sendBuffer();
+    delay(5);
+  }
+
+  if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+
   unsigned long lastSystemTime = CLOCK().getPrevTimeMillis();
 
+  // --- 3. Input Loop ---
   for (;;) {
     #if !OTA_APP 
       if (!noTimeout)  checkTimeout();
@@ -906,7 +1057,16 @@ void waitForKeypress(String message) {
     unsigned long currentSystemTime = CLOCK().getPrevTimeMillis();
     if (currentSystemTime > lastSystemTime) {
         lastSystemTime = currentSystemTime;
-        OLED().oledWord(message, false, false, "Press any key to continue...");
+        
+        u8g2.clearBuffer();
+        u8g2.setFont(activeFont);
+        u8g2.drawUTF8(x_offset, y_offset, msg.c_str());
+        
+        u8g2.setFont(u8g2_font_5x7_tf);
+        u8g2.drawUTF8((dw - u8g2.getUTF8Width(bottomMsg.c_str())) / 2, dh - 2, bottomMsg.c_str());
+        
+        u8g2.drawRFrame(0, 0, dw, dh + 16, 10);
+        u8g2.sendBuffer();
     }
 
     int currentMillis = millis();
@@ -916,13 +1076,32 @@ void waitForKeypress(String message) {
 
       if (inchar != 0) {
         KBBounceMillis = currentMillis; 
-        return; 
+        break; // Break on any key, including Kill Signal
       }
     }
 
     vTaskDelay(pdMS_TO_TICKS(10));
     yield();
   }
+
+  pocketmage::setCpuSpeed(240); // Boost clock for exit animation
+
+  // --- 4. Slide Down Animation ---
+  for (int y = 0; y <= dh; y+=2) {
+    u8g2.clearBuffer();
+    
+    u8g2.setFont(activeFont);
+    u8g2.drawUTF8(x_offset, y + y_offset, msg.c_str());
+    
+    u8g2.setFont(u8g2_font_5x7_tf);
+    u8g2.drawUTF8((dw - u8g2.getUTF8Width(bottomMsg.c_str())) / 2, y + dh - 2, bottomMsg.c_str());
+    
+    u8g2.drawRFrame(0, y, dw, dh + 16, 10);
+    u8g2.sendBuffer();
+    delay(5);
+  }
+
+  if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 }
 
 void checkCrashState() {
