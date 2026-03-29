@@ -25,6 +25,7 @@ public:
   // Main methods
   void oledWord(String word, bool allowLarge = false, bool showInfo = true, String bottomText = "");
   void oledLine(String line, int input_pos, bool doProgressBar = true, String bottomMsg = "");
+  void sysMessage(String msg, int showTime = 1500);
   void oledScroll();
   void infoBar();
   void setPowerSave(bool enable);

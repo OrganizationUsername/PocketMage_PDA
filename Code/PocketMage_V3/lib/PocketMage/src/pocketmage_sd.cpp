@@ -271,13 +271,11 @@ void setupSD() {
 
         delay(5000);
         if (ALLOW_NO_MICROSD) {
-          OLED().oledWord("All Work Will Be Lost!", false, false);
-          delay(5000);
+          OLED().sysMessage("All Work Will be Lost!",5000);
           PM_SDMMC().setNoSD(true);
           return;
         } else {
-          OLED().oledWord("Insert SD Card and Reboot!", false, false);
-          delay(5000);
+          OLED().sysMessage("Insert SD Card and Reboot!",5000);
           OLED().setPowerSave(1);
           BZ().playJingle(Jingles::Shutdown);
           esp_deep_sleep_start();
@@ -464,8 +462,7 @@ PocketmageSDMMC& PM_SDMMC() { return pm_sdmmc; }
     
 void PocketmageSDMMC::saveFile() {
   if (PM_SDMMC().getNoSD()) {
-      OLED().oledWord("SAVE FAILED - No SD!");
-      delay(5000);
+      OLED().sysMessage("SAVE FAILED - No SD!",5000);
       return;
   } else {
       SDActive = true;
@@ -505,8 +502,7 @@ void PocketmageSDMMC::writeMetadata(const String& path) {
 
   File file = global_fs->open(path);
   if (!file || file.isDirectory()) {
-      OLED().oledWord("META WRITE ERR");
-      delay(1000);
+      OLED().sysMessage("META WRITE ERR",1000);
       ESP_LOGE(TAG, "Invalid file for metadata: %s", path);
       return;
   }
@@ -572,8 +568,7 @@ void PocketmageSDMMC::loadFile(bool showOLED) {
   delay(50);
 
   if (PM_SDMMC().getNoSD()) {
-      OLED().oledWord("LOAD FAILED - No SD!");
-      delay(5000);
+      OLED().sysMessage("LOAD FAILED - No SD!",5000);
       return;
   } else {
       SDActive = true;
@@ -603,8 +598,7 @@ void PocketmageSDMMC::loadFile(bool showOLED) {
 }  
 void PocketmageSDMMC::delFile(String fileName) {
   if (PM_SDMMC().getNoSD()) {
-      OLED().oledWord("DELETE FAILED - No SD!");
-      delay(5000);
+      OLED().sysMessage("DELETE FAILED - No SD!",5000);
       return;
   } else {
       SDActive = true;
@@ -671,8 +665,7 @@ void PocketmageSDMMC::deleteMetadata(String path) {
 }  
 void PocketmageSDMMC::renFile(String oldFile, String newFile) {
   if (PM_SDMMC().getNoSD()) {
-      OLED().oledWord("RENAME FAILED - No SD!");
-      delay(5000);
+      OLED().sysMessage("RENAME FAILED - No SD!",5000);
       return;
   } else {
       SDActive = true;

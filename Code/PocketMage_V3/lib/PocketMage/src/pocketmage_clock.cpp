@@ -138,8 +138,7 @@ void PocketmageCLOCK::setTimeFromString(String timeStr) {
 
   if (res != TIME_OK) {
     ESP_LOGE(TAG, "Invalid time (%d): %s", res, timeStr.c_str());
-    OLED().oledWord("Invalid");
-    delay(500);
+    OLED().sysMessage("Invalid", 500);
     return;
   }
 

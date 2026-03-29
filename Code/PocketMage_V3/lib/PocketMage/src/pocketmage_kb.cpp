@@ -7,6 +7,7 @@
 // AUDIT 1
                     
 #include <pocketmage.h>
+#include <globals.h>
 
 #pragma region usb keyboard
 // =========================================== USB Keyboard =========================================== //
@@ -704,8 +705,7 @@ void IRAM_ATTR KB_irq_handler() { KB().setTCA8418Event(); }
 void setupKB(int KB_irq_pin) {
   if (!keypad.begin(TCA8418_DEFAULT_ADDR, &Wire)) {
     ESP_LOGE(TAG, "Error Initializing the Keyboard");
-    OLED().oledWord("Keyboard INIT Failed");
-    delay(1000);
+    OLED().sysMessage("Keyboard INIT Failed", 1000);
     while (1);
   }
   keypad.matrix(4, 10);
@@ -728,19 +728,16 @@ PocketmageKB& KB() { return pm_kb; }
 // ===================== public functions =====================
 char PocketmageKB::updateKeypress() {
   // --- 1. UTF-8 Multi-Byte Buffer ---
-  // Because special characters are multi-byte UTF-8, we use a static buffer
-  // to return them one byte at a time to the main OS loop.
   static char utf8Buffer[8] = {0};
   if (utf8Buffer[0] != '\0') {
     char c = utf8Buffer[0];
-    memmove(utf8Buffer, utf8Buffer + 1, 7); // Shift buffer left
+    memmove(utf8Buffer, utf8Buffer + 1, 7); 
     return c;
   }
 
   // Check for USB char
   char USB_CHAR = pop_USB_char();
   if (USB_CHAR != '\0') {
-    //Key was pressed, reset timeout counter
     CLOCK().setPrevTimeMillis(millis());
     return USB_CHAR;
   }
@@ -749,8 +746,6 @@ char PocketmageKB::updateKeypress() {
   if (TCA8418_event_ == true) {
     int k = keypad_.getEvent();
     
-    //  try to clear the IRQ flag
-    //  if there are pending events it is not cleared
     keypad_.writeRegister(TCA8418_REG_INT_STAT, 1);
     int intstat = keypad_.readRegister(TCA8418_REG_INT_STAT);
     if ((intstat & 0x01) == 0) TCA8418_event_ = false;
@@ -760,155 +755,283 @@ char PocketmageKB::updateKeypress() {
       k &= 0x7F;
       k--;
 
-      if (isPress && (k / 10) < 4) {
-        //Key was pressed, reset timeout counter
-        CLOCK().setPrevTimeMillis(millis());
+      if ((k / 10) < 4) {
+        char baseC = keysArray[k/10][k%10]; // Read base char to ID physical keys
 
-        // --- 2. HOLD-TAB SPECIAL CHARACTER UI ---
-        if (k == 20) { // TAB KEY
-          unsigned long pressTime = millis();
-          bool charSelected = false;
-          int cycleIndex = 0;
-          char activeBaseChar = 0;
-          const char** activeCycle = nullptr;
-          int activeCycleLen = 0;
-          bool uiDrawn = false;
+        // --- 2. MODIFIER STATE MACHINE ---
+        static bool fn_phys_held = false;
+        static bool shift_phys_held = false;
+        static bool fn_locked = false;
+        static bool shift_locked = false;
+        static unsigned long fn_press_time = 0;
+        static unsigned long shift_press_time = 0;
+        static bool fn_used = false;
+        static bool shift_used = false;
 
-          for (;;) {
-            // Draw the "Holding" hint after 100ms
-            if (!uiDrawn && (millis() - pressTime > 100)) {
-              u8g2.setDrawColor(0);
-              u8g2.setFont(u8g2_font_5x7_tf);
-              u8g2.drawBox(u8g2.getDisplayWidth()-u8g2.getStrWidth("XXXX/XX/XXXX"), u8g2.getDisplayHeight()- 8, u8g2.getStrWidth("XXXX/XX/XXXX"), 8);
-              u8g2.setDrawColor(1);
-              u8g2.drawStr(u8g2.getDisplayWidth()-u8g2.getStrWidth("INTL"), u8g2.getDisplayHeight(), "INTL");
-              u8g2.sendBuffer();
-              uiDrawn = true;
-            }
+        // Helper to evaluate and set the true global state
+        auto sync_and_update_state = [&]() {
+            bool eff_fn = fn_phys_held || fn_locked;
+            bool eff_shift = shift_phys_held || shift_locked;
+            if (eff_fn && eff_shift) kbState_ = 3;
+            else if (eff_fn) kbState_ = 2;
+            else if (eff_shift) kbState_ = 1;
+            else kbState_ = 0;
+        };
 
-            int next_k = keypad_.getEvent();
-            if (next_k != 0) {
-              bool nextPress = (next_k & 0x80) != 0;
-              next_k &= 0x7F;
-              next_k--;
+        if (isPress) {
+          // Key was pressed, reset timeout counter
+          CLOCK().setPrevTimeMillis(millis());
 
-              // If TAB is RELEASED
-              if (!nextPress && next_k == 20) { 
-                if (!charSelected) {
-                  if (uiDrawn) {
+          if (baseC == 18) { // FN Key Pressed
+            // Reverse-sync: Check if an OS app artificially forced the state
+            fn_locked = (kbState_ == 2 || kbState_ == 3);
+            shift_locked = (kbState_ == 1 || kbState_ == 3);
+            
+            fn_phys_held = true;
+            fn_press_time = millis();
+            fn_used = false;
+            sync_and_update_state();
+            CLOCK().setPrevTimeMillis(millis() + 1); // Force OS redraw for indicator
+            return 0; // Hide from OS app's input loop
+          }
+          else if (baseC == 17) { // SHIFT Key Pressed
+            fn_locked = (kbState_ == 2 || kbState_ == 3);
+            shift_locked = (kbState_ == 1 || kbState_ == 3);
+            
+            shift_phys_held = true;
+            shift_press_time = millis();
+            shift_used = false;
+            sync_and_update_state();
+            CLOCK().setPrevTimeMillis(millis() + 1); 
+            return 0; 
+          }
+
+          // A normal key was pressed: mark modifiers as "used" so they don't lock on release
+          fn_used = true;
+          shift_used = true;
+
+          // --- 3. HOLD-TAB SPECIAL CHARACTER UI ---
+          if (k == 20) { // TAB KEY (Index 20)
+            unsigned long pressTime = millis();
+            bool charSelected = false;
+            int cycleIndex = 0;
+            char activeBaseChar = 0;
+            const char** activeCycle = nullptr;
+            int activeCycleLen = 0;
+            bool uiDrawn = false;
+
+            for (;;) {
+              // Draw the "Holding" hint after 100ms
+              if (!uiDrawn && (millis() - pressTime > 100)) {
+                u8g2.setDrawColor(0);
+                u8g2.setFont(u8g2_font_5x7_tf);
+                u8g2.drawBox(u8g2.getDisplayWidth()-u8g2.getStrWidth("XXXX/XX/XXXX"), u8g2.getDisplayHeight()- 8, u8g2.getStrWidth("XXXX/XX/XXXX"), 8);
+                u8g2.setDrawColor(1);
+                u8g2.drawStr(u8g2.getDisplayWidth()-u8g2.getStrWidth("SPECIAL"), u8g2.getDisplayHeight(), "SPECIAL");
+                u8g2.sendBuffer();
+                uiDrawn = true;
+              }
+
+              int next_k = keypad_.getEvent();
+              if (next_k != 0) {
+                bool nextPress = (next_k & 0x80) != 0;
+                next_k &= 0x7F;
+                next_k--;
+
+                // If TAB is RELEASED
+                if (!nextPress && next_k == 20) { 
+                  if (!charSelected) {
+                    if (uiDrawn) {
+                      u8g2.clearBuffer();
+                      u8g2.sendBuffer();
+                    }
+                    return (kbState_ == 1 || kbState_ == 3) ? 14 : 9; 
+                  } else {
                     u8g2.clearBuffer();
                     u8g2.sendBuffer();
+
+                    // --- APP SWITCHER HOOK ---
+                    if (activeCycleLen == 11 && CurrentAppState != USB_APP) { // cyc_appSwitch trigger length
+                        if (cycleIndex == 1) TXT_INIT("");
+                        else if (cycleIndex == 2) FILEWIZ_INIT();
+                        else if (cycleIndex == 3) USB_INIT();
+                        else if (cycleIndex == 4) SETTINGS_INIT();
+                        else if (cycleIndex == 5) TASKS_INIT();
+                        else if (cycleIndex == 6) CALENDAR_INIT();
+                        else if (cycleIndex == 7) JOURNAL_INIT();
+                        else if (cycleIndex == 8) LEXICON_INIT();
+                        else if (cycleIndex == 9) TERMINAL_INIT();
+                        else if (cycleIndex == 10) APPLOADER_INIT();
+                        // If 0 ("cancel"), do nothing.
+                        
+                        return 0; // Return 0 so we don't accidentally type a char into the newly opened app!
+                    }
+                    else if (CurrentAppState == USB_APP) {
+                      OLED().sysMessage("Please close USB connection",2000);
+                      return 0;
+                    }
+
+                    // Normal Special Character
+                    String sel = activeCycle[cycleIndex];
+                    strncpy(utf8Buffer, sel.c_str(), 7);
+                    char c = utf8Buffer[0];
+                    memmove(utf8Buffer, utf8Buffer + 1, 7);
+                    return c; 
                   }
-                  // Return normal TAB depending on SHIFT state
-                  return (kbState_ == 1 || kbState_ == 3) ? 14 : 9; 
-                } else {
-                  // Push the selected UTF-8 string into the buffer
-                  String sel = activeCycle[cycleIndex];
-                  strncpy(utf8Buffer, sel.c_str(), 7);
-                  
-                  char c = utf8Buffer[0];
-                  memmove(utf8Buffer, utf8Buffer + 1, 7);
-                  
-                  u8g2.clearBuffer();
-                  u8g2.sendBuffer();
-                  return c; // Return first byte instantly
-                }
-              } 
-              // If another key is PRESSED while holding TAB
-              else if (nextPress && (next_k / 10) < 4) {
-                char baseC = 0;
-                switch (kbState_) {
-                  case 0: baseC = keysArray[next_k/10][next_k%10]; break;
-                  case 1: baseC = keysArraySHFT[next_k/10][next_k%10]; break;
-                  case 2: baseC = keysArrayFN[next_k/10][next_k%10]; break;
-                  case 3: baseC = keysArrayFN_SHFT[next_k/10][next_k%10]; break;
-                }
-
-                // Special character arrays (Native UTF-8 Strings)
-                static const char* cyc_a[] = {"a", "á", "à", "â", "ä", "ã", "å", "æ"};
-                static const char* cyc_A[] = {"A", "Á", "À", "Â", "Ä", "Ã", "Å", "Æ"};
-                static const char* cyc_e[] = {"e", "é", "è", "ê", "ë"};
-                static const char* cyc_E[] = {"E", "É", "È", "Ê", "Ë"};
-                static const char* cyc_i[] = {"i", "í", "ì", "î", "ï"};
-                static const char* cyc_I[] = {"I", "Í", "Ì", "Î", "Ï"};
-                static const char* cyc_o[] = {"o", "ó", "ò", "ô", "ö", "õ", "ø"};
-                static const char* cyc_O[] = {"O", "Ó", "Ò", "Ô", "Ö", "Õ", "Ø"};
-                static const char* cyc_u[] = {"u", "ú", "ù", "û", "ü"};
-                static const char* cyc_U[] = {"U", "Ú", "Ù", "Û", "Ü"};
-                static const char* cyc_n[] = {"n", "ñ"};
-                static const char* cyc_N[] = {"N", "Ñ"};
-                static const char* cyc_c[] = {"c", "ç"};
-                static const char* cyc_C[] = {"C", "Ç"};
-
-                bool matched = true;
-                if (baseC == 'a') { activeCycle = cyc_a; activeCycleLen = 8; }
-                else if (baseC == 'A') { activeCycle = cyc_A; activeCycleLen = 8; }
-                else if (baseC == 'e') { activeCycle = cyc_e; activeCycleLen = 5; }
-                else if (baseC == 'E') { activeCycle = cyc_E; activeCycleLen = 5; }
-                else if (baseC == 'i') { activeCycle = cyc_i; activeCycleLen = 5; }
-                else if (baseC == 'I') { activeCycle = cyc_I; activeCycleLen = 5; }
-                else if (baseC == 'o') { activeCycle = cyc_o; activeCycleLen = 7; }
-                else if (baseC == 'O') { activeCycle = cyc_O; activeCycleLen = 7; }
-                else if (baseC == 'u') { activeCycle = cyc_u; activeCycleLen = 5; }
-                else if (baseC == 'U') { activeCycle = cyc_U; activeCycleLen = 5; }
-                else if (baseC == 'n') { activeCycle = cyc_n; activeCycleLen = 2; }
-                else if (baseC == 'N') { activeCycle = cyc_N; activeCycleLen = 2; }
-                else if (baseC == 'c') { activeCycle = cyc_c; activeCycleLen = 2; }
-                else if (baseC == 'C') { activeCycle = cyc_C; activeCycleLen = 2; }
-                else matched = false;
-
-                if (matched) {
-                  if (baseC == activeBaseChar) {
-                    cycleIndex = (cycleIndex + 1) % activeCycleLen;
-                  } else {
-                    activeBaseChar = baseC;
-                    cycleIndex = 1 % activeCycleLen;
+                } 
+                // If another key is PRESSED while holding TAB
+                else if (nextPress && (next_k / 10) < 4) {
+                  char nestedBaseC = 0;
+                  switch (kbState_) {
+                    case 0: nestedBaseC = keysArray[next_k/10][next_k%10]; break;
+                    case 1: nestedBaseC = keysArraySHFT[next_k/10][next_k%10]; break;
+                    case 2: nestedBaseC = keysArrayFN[next_k/10][next_k%10]; break;
+                    case 3: nestedBaseC = keysArrayFN_SHFT[next_k/10][next_k%10]; break;
                   }
-                  charSelected = true;
 
-                  // Render Character Selector
-                  int cx = (u8g2.getDisplayWidth()-22*activeCycleLen)/2.0;
-                  u8g2.setDrawColor(0);
-                  u8g2.drawRBox(cx, 2, activeCycleLen*22, 28, 4);
-                  u8g2.setDrawColor(1);
-                  u8g2.drawRFrame(cx, 2, activeCycleLen*22, 28, 4);
-                  u8g2.setFont(u8g2_font_luBS18_tf);
+                  static const char* cyc_a[] = {"a", "á", "à", "â", "ä", "ã", "å", "æ"};
+                  static const char* cyc_A[] = {"A", "Á", "À", "Â", "Ä", "Ã", "Å", "Æ"};
+                  static const char* cyc_e[] = {"e", "é", "è", "ê", "ë"};
+                  static const char* cyc_E[] = {"E", "É", "È", "Ê", "Ë"};
+                  static const char* cyc_i[] = {"i", "í", "ì", "î", "ï"};
+                  static const char* cyc_I[] = {"I", "Í", "Ì", "Î", "Ï"};
+                  static const char* cyc_o[] = {"o", "ó", "ò", "ô", "ö", "õ", "ø"};
+                  static const char* cyc_O[] = {"O", "Ó", "Ò", "Ô", "Ö", "Õ", "Ø"};
+                  static const char* cyc_u[] = {"u", "ú", "ù", "û", "ü"};
+                  static const char* cyc_U[] = {"U", "Ú", "Ù", "Û", "Ü"};
+                  static const char* cyc_n[] = {"n", "ñ"};
+                  static const char* cyc_N[] = {"N", "Ñ"};
+                  static const char* cyc_c[] = {"c", "ç"};
+                  static const char* cyc_C[] = {"C", "Ç"};
+                  
+                  // App Switcher Arrays
+                  static const char* cyc_appSwitch[] = {" ", "N", "F", "U", "S", "T", "C", "J", "D", "P", "L"};
+                  static const char* appSwitchNames[] = {"cancel", "txt", "filewiz", "USB", "settings", "tasks", "calendar", "journal", "lexicon", "terminal", "app loader"};
 
-                  for (int i=0; i<activeCycleLen; i++) {
-                      if (i == cycleIndex) {
-                          u8g2.setDrawColor(1);
-                          u8g2.drawRBox(cx, 2, 22, 28, 4);
-                          u8g2.setDrawColor(0);
-                      } else {
-                          u8g2.setDrawColor(1);
-                      }
-                      u8g2.drawUTF8(cx + ((22-u8g2.getUTF8Width(activeCycle[i]))/2.0), 25, activeCycle[i]);
+                  bool matched = true;
+                  if (nestedBaseC == 'a') { activeCycle = cyc_a; activeCycleLen = 8; }
+                  else if (nestedBaseC == 'A') { activeCycle = cyc_A; activeCycleLen = 8; }
+                  else if (nestedBaseC == 'e') { activeCycle = cyc_e; activeCycleLen = 5; }
+                  else if (nestedBaseC == 'E') { activeCycle = cyc_E; activeCycleLen = 5; }
+                  else if (nestedBaseC == 'i') { activeCycle = cyc_i; activeCycleLen = 5; }
+                  else if (nestedBaseC == 'I') { activeCycle = cyc_I; activeCycleLen = 5; }
+                  else if (nestedBaseC == 'o') { activeCycle = cyc_o; activeCycleLen = 7; }
+                  else if (nestedBaseC == 'O') { activeCycle = cyc_O; activeCycleLen = 7; }
+                  else if (nestedBaseC == 'u') { activeCycle = cyc_u; activeCycleLen = 5; }
+                  else if (nestedBaseC == 'U') { activeCycle = cyc_U; activeCycleLen = 5; }
+                  else if (nestedBaseC == 'n') { activeCycle = cyc_n; activeCycleLen = 2; }
+                  else if (nestedBaseC == 'N') { activeCycle = cyc_N; activeCycleLen = 2; }
+                  else if (nestedBaseC == 'c') { activeCycle = cyc_c; activeCycleLen = 2; }
+                  else if (nestedBaseC == 'C') { activeCycle = cyc_C; activeCycleLen = 2; }
+                  else if (nestedBaseC == 20)  { activeCycle = cyc_appSwitch; activeCycleLen = 11; }
+                  else matched = false;
+
+                  if (matched) {
+                    if (nestedBaseC == activeBaseChar) cycleIndex = (cycleIndex + 1) % activeCycleLen;
+                    else { activeBaseChar = nestedBaseC; cycleIndex = 1 % activeCycleLen; }
+                    charSelected = true;
+
+                    int cx = (u8g2.getDisplayWidth()-22*activeCycleLen)/2.0;
+
+                    if (activeCycle != cyc_appSwitch) {
                       u8g2.setDrawColor(0);
-                      cx += 22;
+                      u8g2.drawRBox(cx, 2, activeCycleLen*22, 28, 4);
+                      u8g2.setDrawColor(1);
+                      u8g2.drawRFrame(cx, 2, activeCycleLen*22, 28, 4);
+                      u8g2.setFont(u8g2_font_luBS18_tf);
+
+                      for (int i=0; i<activeCycleLen; i++) {
+                          if (i == cycleIndex) {
+                            u8g2.setDrawColor(1);
+                            u8g2.drawRBox(cx, 2, 22, 28, 4);
+                            u8g2.setDrawColor(0);
+                          } else {
+                            u8g2.setDrawColor(1);
+                          }
+                          u8g2.drawUTF8(cx + ((22-u8g2.getUTF8Width(activeCycle[i]))/2.0), 25, activeCycle[i]);
+                          u8g2.setDrawColor(0);
+                          cx += 22;
+                      }
+                    }
+                    else {
+                      u8g2.setDrawColor(0);
+                      u8g2.setFont(u8g2_font_5x7_tf);
+                      u8g2.drawRBox((u8g2.getDisplayWidth() - u8g2.getStrWidth("XXXXXXXXXXXX"))/2, u8g2.getDisplayHeight()-7,u8g2.getStrWidth("XXXXXXXXXXXX"),7,4);
+                      u8g2.drawRBox(cx, 0, activeCycleLen*22, 28, 4);
+                      u8g2.setDrawColor(1);
+                      u8g2.drawRFrame(cx, 0, activeCycleLen*22, 28, 4);
+                      u8g2.setFont(u8g2_font_luBS18_tf);
+
+                      for (int i=0; i<activeCycleLen; i++) {
+                          if (i == cycleIndex) {
+                            u8g2.setDrawColor(1);
+                            u8g2.drawRBox(cx, 0, 22, 28, 4);
+                            u8g2.setDrawColor(0);
+                          } else {
+                            u8g2.setDrawColor(1);
+                          }
+                          u8g2.setFont(u8g2_font_luBS18_tf);
+                          u8g2.drawUTF8(cx + ((22-u8g2.getUTF8Width(activeCycle[i]))/2.0), 23, activeCycle[i]);
+
+                          u8g2.setDrawColor(0);
+                          cx += 22;
+                      }
+                    }
+                    
+                    if (activeCycle == cyc_appSwitch) {
+                      // Clear space for label
+                      u8g2.setFont(u8g2_font_5x7_tf);
+                      u8g2.setDrawColor(0);
+                      u8g2.drawRBox((u8g2.getDisplayWidth() - (u8g2.getStrWidth(appSwitchNames[cycleIndex])+6))/2, u8g2.getDisplayHeight()-12,u8g2.getStrWidth(appSwitchNames[cycleIndex])+6,11,4);
+                      
+                      // Draw border
+                      u8g2.setDrawColor(1);
+                      u8g2.drawRFrame((u8g2.getDisplayWidth() - (u8g2.getStrWidth(appSwitchNames[cycleIndex])+6))/2, u8g2.getDisplayHeight()-12,u8g2.getStrWidth(appSwitchNames[cycleIndex])+6,11,4);
+                    
+                      // Draw app name
+                      u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(appSwitchNames[cycleIndex]))/2,u8g2.getDisplayHeight()-3,appSwitchNames[cycleIndex]);
+                    }
+
+                    u8g2.sendBuffer();
+                    u8g2.setDrawColor(1);
+                    uiDrawn = true;
                   }
-                  u8g2.sendBuffer();
-                  u8g2.setDrawColor(1);
-                  uiDrawn = true;
                 }
               }
+              delay(10); 
             }
-            delay(10); // Don't choke the RTOS
           }
-        }
-        // --- END SPECIAL CHARACTER LOGIC ---
+          // --- END SPECIAL CHARACTER LOGIC ---
 
-        //Return Key
-        switch (kbState_) {
-          case 0:
-            return keysArray[k/10][k%10];
-          case 1:
-            return keysArraySHFT[k/10][k%10];
-          case 2:
-            return keysArrayFN[k/10][k%10];
-          case 3:
-            return keysArrayFN_SHFT[k/10][k%10];
-          default:
+          // Return standard character map based on live state
+          switch (kbState_) {
+            case 0: return keysArray[k/10][k%10];
+            case 1: return keysArraySHFT[k/10][k%10];
+            case 2: return keysArrayFN[k/10][k%10];
+            case 3: return keysArrayFN_SHFT[k/10][k%10];
+            default: return 0;
+          }
+        } 
+        else { // --- KEY RELEASED ---
+          if (baseC == 18) { // FN
+            fn_phys_held = false;
+            // If the user tapped the key quickly and didn't type anything, toggle the lock!
+            if (!fn_used && (millis() - fn_press_time < 400)) {
+              fn_locked = !fn_locked; 
+            }
+            sync_and_update_state();
+            CLOCK().setPrevTimeMillis(millis() + 1); // Force OS redraw
             return 0;
+          }
+          else if (baseC == 17) { // SHIFT
+            shift_phys_held = false;
+            if (!shift_used && (millis() - shift_press_time < 400)) {
+              shift_locked = !shift_locked; 
+            }
+            sync_and_update_state();
+            CLOCK().setPrevTimeMillis(millis() + 1); // Force OS redraw
+            return 0;
+          }
         }
       }
     }
