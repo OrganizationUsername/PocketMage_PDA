@@ -81,8 +81,7 @@ void LEXICON_INIT() {
   pocketmage::setCpuSpeed(240);
   delay(50);
   if (!global_fs->exists("/dict/A.txt")) {
-    OLED().oledWord("Please install dict from GitHub!");
-    delay(5000);
+    OLED().sysMessage("Please install dict from GitHub!",5000);
     pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     HOME_INIT();
   }
@@ -119,8 +118,7 @@ void loadDefinitions(String input) {
 
   File file = global_fs->open(filePath);
   if (!file) {
-    OLED().oledWord("Missing Dictionary!");
-    delay(2000);
+    OLED().sysMessage("Missing Dictionary!",2000);
     SDActive = false;
     if (SAVE_POWER)
       pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
@@ -163,9 +161,7 @@ void loadDefinitions(String input) {
   file.close();
 
   if (defList.empty()) {
-    OLED().oledWord("No definitions found");
-    delay(2000);
-    
+    OLED().sysMessage("No definitions found",2000);    
 
     CurrentLexState = MENU; 
     newState = true;
@@ -199,7 +195,8 @@ void processKB_LEXICON() {
     case MENU:
       KB().setKeyboardState(NORMAL);
       command = textPrompt();
-      if (command != "_EXIT_") loadDefinitions(command);
+      if (command == "_RETURN_") return;
+      else if (command != "_EXIT_") loadDefinitions(command);
       else HOME_INIT();
       break;
 

@@ -1137,8 +1137,7 @@ bool isFolderEmpty(const char* dirPath) {
 #pragma region Mrkdn File Ops
 void saveMarkdownFile(const String& path) {
   if (PM_SDAUTO().getNoSD()) {
-    OLED().oledWord("SAVE FAILED - No SD!");
-    delay(3000);
+    OLED().sysMessage("SAVE FAILED - No SD!",3000);
     return;
   }
 
@@ -1154,8 +1153,7 @@ void saveMarkdownFile(const String& path) {
 
   File file = global_fs->open(savePath.c_str(), FILE_WRITE);
   if (!file) {
-    OLED().oledWord("SAVE FAILED - OPEN ERR");
-    delay(2000);
+    OLED().sysMessage("SAVE FAILED - OPEN ERR",2000);
     ESP_LOGE("SD", "Failed to open file for writing: %s", savePath.c_str());
     SDActive = false;
     if (SAVE_POWER) pocketmage::setCpuSpeed(80);
@@ -1214,8 +1212,7 @@ void saveMarkdownFile(const String& path) {
   PM_SDAUTO().writeMetadata(savePath);
   PM_SDAUTO().setEditingFile(savePath);
 
-  OLED().oledWord("Saved: " + savePath);
-  delay(1000);
+  OLED().sysMessage("Saved: " + savePath,1000);
 
   if (SAVE_POWER) pocketmage::setCpuSpeed(80); 
   SDActive = false;
@@ -1229,8 +1226,7 @@ bool loadMarkdownFile(const String& path) {
   }
 
   if (PM_SDAUTO().getNoSD()) {
-    OLED().oledWord("LOAD FAILED - No SD!");
-    delay(5000);
+    OLED().sysMessage("LOAD FAILED - No SD!",5000);
     return false;
   }
 
@@ -1332,16 +1328,14 @@ bool loadMarkdownFile(const String& path) {
     pocketmage::setCpuSpeed(80);
   SDActive = false;
 
-  OLED().oledWord("FILE LOADED");
-  delay(500);
+  OLED().sysMessage("FILE LOADED",500);
 
   return true;
 }
 
 void newMarkdownFile(const String& path) {
   if (PM_SDAUTO().getNoSD()) {
-    OLED().oledWord("CREATE FAILED - No SD!");
-    delay(3000);
+    OLED().sysMessage("CREATE FAILED - No SD!",3000);
     return;
   }
 
@@ -1355,8 +1349,7 @@ void newMarkdownFile(const String& path) {
 
   File file = global_fs->open(savePath.c_str(), FILE_WRITE);
   if (!file) {
-    OLED().oledWord("CREATE FAILED");
-    delay(2000);
+    OLED().sysMessage("CREATE FAILED",2000);
     ESP_LOGE("SD", "Failed to create file: %s", savePath.c_str());
     SDActive = false;
     if (SAVE_POWER) pocketmage::setCpuSpeed(80);
@@ -1367,8 +1360,7 @@ void newMarkdownFile(const String& path) {
   PM_SDAUTO().writeMetadata(savePath);
   PM_SDAUTO().setEditingFile(savePath);
 
-  OLED().oledWord("Created File");
-  delay(1000);
+  OLED().sysMessage("Created File",1000);
 
   loadMarkdownFile(savePath);
   
@@ -2004,8 +1996,7 @@ void processKB_TXT_NEW() {
             saveMarkdownFile(inputBuffer);
             CurrentTXTState_NEW = TXT_;
           } else {
-            OLED().oledWord("Invalid Name");
-            delay(2000);
+            OLED().sysMessage("Invalid Name",2000);
           }
           inputBuffer = "";
         }
@@ -2059,8 +2050,7 @@ void processKB_TXT_NEW() {
             CurrentTXTState_NEW = TXT_;
             updateScreen = true;
           } else {
-            OLED().oledWord("Invalid Name");
-            delay(2000);
+            OLED().sysMessage("Invalid Name",2000);
           }
           inputBuffer = "";
         }
@@ -2116,8 +2106,7 @@ void processKB_TXT_NEW() {
           CurrentTXTState_NEW = TXT_;
           updateScreen = true;
         } else {
-          OLED().oledWord("Incompatible Filetype!");
-          delay(2000);
+          OLED().sysMessage("Incompatible Filetype!",2000);
           CurrentTXTState_NEW = TXT_;
         }
       }

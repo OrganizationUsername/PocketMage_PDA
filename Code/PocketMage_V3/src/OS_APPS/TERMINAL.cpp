@@ -176,8 +176,7 @@ void savePotionFile(String path) {
 
   file.close();
   pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
-  OLED().oledWord("FILE SAVED");
-  delay(500);
+  OLED().sysMessage("FILE SAVED",500);
 }
 
 void potionInit() {
@@ -327,8 +326,7 @@ void funcSelect(String command) {
     pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
-      OLED().oledWord(returnText);
-      delay(1000);
+      OLED().sysMessage(returnText,1000);
     }
     newState = true;
     return;
@@ -382,8 +380,7 @@ void funcSelect(String command) {
     pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
-      OLED().oledWord(returnText);
-      delay(1000);
+      OLED().sysMessage(returnText,1000);
     }
     newState = true;
     return;
@@ -417,8 +414,7 @@ void funcSelect(String command) {
     pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
-      OLED().oledWord(returnText);
-      delay(1000);
+      OLED().sysMessage(returnText,1000);
     }
     newState = true;
     return;
@@ -455,8 +451,7 @@ void funcSelect(String command) {
 
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
-      OLED().oledWord(returnText);
-      delay(1000);
+      OLED().sysMessage(returnText,1000);
     }
 
     newState = true;
@@ -502,8 +497,7 @@ void funcSelect(String command) {
     pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
-      OLED().oledWord(returnText);
-      delay(1000);
+      OLED().sysMessage(returnText,1000);
     }
     newState = true;
     return;
@@ -556,8 +550,7 @@ void funcSelect(String command) {
     pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
-      OLED().oledWord(returnText);
-      delay(1000);
+      OLED().sysMessage(returnText,1000);
     }
     newState = true;
     return;
@@ -615,8 +608,7 @@ void funcSelect(String command) {
     pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
-      OLED().oledWord(returnText);
-      delay(1000);
+      OLED().sysMessage(returnText,1000);
     }
     newState = true;
     return;
@@ -655,8 +647,7 @@ void funcSelect(String command) {
     pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
-      OLED().oledWord(returnText);
-      delay(1000);
+      OLED().sysMessage(returnText,1000);
     }
     newState = true;
     return;
@@ -706,8 +697,7 @@ void funcSelect(String command) {
 
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
-      OLED().oledWord(returnText);
-      delay(1000);
+      OLED().sysMessage(returnText,1000);
     }
     newState = true;
     return;
@@ -768,8 +758,7 @@ void funcSelect(String command) {
 
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
-      OLED().oledWord(returnText);
-      delay(1000);
+      OLED().sysMessage(returnText,1000);
     }
     newState = true;
     return;
@@ -827,8 +816,7 @@ void funcSelect(String command) {
 
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
-      OLED().oledWord(returnText);
-      delay(1000);
+      OLED().sysMessage(returnText,1000);
     }
     newState = true;
     return;
@@ -868,7 +856,8 @@ void wr_prompt(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void* 
   const char* promptText = argv[0].asString(inbuf, 1024);
 
   String entered = textPrompt(promptText);
-  if (entered == "_EXIT_") entered = "";
+  if (entered == "_RETURN_") return;
+  else if (entered == "_EXIT_") entered = "";
   entered.toCharArray(retbuf, sizeof(retbuf));
 
   wr_makeString(c, &ret, retbuf);
@@ -1195,7 +1184,8 @@ void processKB_TERMINAL() {
     case PROMPT:
       KB().setKeyboardState(NORMAL);
       command = textPrompt("", currentDir + ">");
-      if (command != "_EXIT_") {
+      if (command == "_RETURN_") return;
+      else if (command != "_EXIT_") {
         funcSelect(command);
       } else
         HOME_INIT();
@@ -1297,7 +1287,8 @@ void processKB_TERMINAL() {
         else if (inchar == 20) {
           KB().setKeyboardState(FUNC);
           command = textPrompt("GOTO LINE:");
-          if (command != "_EXIT_") {
+          if (command == "_RETURN_") return;
+          else if (command != "_EXIT_") {
             int line = atoi(command.c_str());
             // Line is in bounds
             if (line >= 0 && line < potionLines.size()) {

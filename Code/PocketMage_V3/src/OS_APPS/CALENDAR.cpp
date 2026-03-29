@@ -156,8 +156,7 @@ void updateEventsFile() {
       PM_SDAUTO().renameFile(*global_fs, tempFile, eventsFile);
     }
   } else {
-    OLED().oledWord("SAVE FAILED!");
-    delay(1000); 
+    OLED().sysMessage("SAVE FAILED!",1000);
   }
 
   if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
@@ -320,8 +319,7 @@ void commandSelectMonth(String command) {
       if (prefix == monthNames[i]) {
         int yearInt = stringToInt(yearPart);
         if (yearInt == -1 || yearInt < 1970 || yearInt > 2200) {
-          OLED().oledWord("Invalid");
-          delay(500);
+          OLED().sysMessage("Invalid",500);
           return;
         }
 
@@ -347,8 +345,7 @@ void commandSelectMonth(String command) {
     int date = command.substring(6, 8).toInt();
 
     if (year < 1970 || year > 2200 || month < 1 || month > 12 || date < 1 || date > daysInMonth(month, year)) {
-      OLED().oledWord("Invalid");
-      delay(500);
+      OLED().sysMessage("Invalid",500);
       return;
     }
 
@@ -383,8 +380,7 @@ void commandSelectMonth(String command) {
     int intDay = stringToPositiveInt(command);
     DateTime now = CLOCK().nowDT();
     if (intDay == -1 || intDay > daysInMonth(currentMonth, currentYear)) {
-      OLED().oledWord("Invalid");
-      delay(500);
+      OLED().sysMessage("Invalid",500);
       return;
     }
     else {
@@ -1001,7 +997,8 @@ void processKB_CALENDAR() {
       if (newEventState == 0) {
         KB().setKeyboardState(NORMAL);
         String input = textPrompt("Enter Event Name:");
-        if (input != "_EXIT_") { 
+        if (input == "_RETURN_") return;
+        else if (input != "_EXIT_") { 
           newEventName = input; 
           newEventState++; 
           newState = true; delay(50); 
@@ -1036,7 +1033,8 @@ void processKB_CALENDAR() {
         KB().setKeyboardState(NORMAL);
         while (true) {
           String code = textPrompt("Repeat (NO, DAILY, WEEKLY XX...):");
-          if (code == "_EXIT_") { CurrentCalendarState = MONTH; newState = true; break; }
+          if (code == "_RETURN_") return;
+          else if (code == "_EXIT_") { CurrentCalendarState = MONTH; newState = true; break; }
           
           code.toUpperCase();
           if (code == "NO" || code == "DAILY" || code.startsWith("WEEKLY ") || 
@@ -1045,19 +1043,18 @@ void processKB_CALENDAR() {
             newEventState++; newState = true; delay(50);
             break;
           } else {
-            OLED().oledWord("Invalid Repeat Code");
-            delay(1000);
+            OLED().sysMessage("Invalid Repeat Code",1000);
           }
         }
       }
       else if (newEventState == 5) {
         KB().setKeyboardState(NORMAL);
         String note = textPrompt("Attach Note:");
-        if (note != "_EXIT_") {
+        if (note == "_RETURN_") return;
+        else if (note != "_EXIT_") {
           newEventNote = note;
           addEvent(newEventName, newEventStartDate, newEventStartTime, newEventDuration, newEventRepeat, newEventNote);
-          OLED().oledWord("Event Created!");
-          delay(1000);
+          OLED().sysMessage("Event Created!",1000);
           CurrentCalendarState = MONTH;
           newState = true;
         } else {
@@ -1079,7 +1076,8 @@ void processKB_CALENDAR() {
         }  
         else if (inchar == '1') {
           String input = textPrompt("Edit Event Name:");
-          if (input != "_EXIT_") { newEventName = input; newState = true; }
+          if (input == "_RETURN_") return;
+          else if (input != "_EXIT_") { newEventName = input; newState = true; }
         }
         else if (inchar == '2') {
           String uiDate = datePrompt(newEventStartDate); 
@@ -1108,28 +1106,28 @@ void processKB_CALENDAR() {
         }
         else if (inchar == '5') {
           String code = textPrompt("Edit Repeat (NO, DAILY...):");
-          if (code != "_EXIT_") {
+          if (code == "_RETURN_") return;
+          else if (code != "_EXIT_") {
             code.toUpperCase();
             if (code == "NO" || code == "DAILY" || code.startsWith("WEEKLY ") || 
                 code.startsWith("MONTHLY ") || code.startsWith("YEARLY ")) {
               newEventRepeat = code;
               newState = true;
             } else {
-              OLED().oledWord("Invalid Repeat Code");
-              delay(1000);
+              OLED().sysMessage("Invalid Repeat Code",1000);
             }
           }
         }
         else if (inchar == '6') {
           String note = textPrompt("Edit Note:");
-          if (note != "_EXIT_") { newEventNote = note; newState = true; }
+          if (note == "_RETURN_") return;
+          else if (note != "_EXIT_") { newEventNote = note; newState = true; }
         }
         else if (inchar == '$') { // 'd' in FUNC layer
           if (boolPrompt("Delete Event?") == 1) {
             deleteEventByIndex(editingEventIndex);
             updateEventsFile();
-            OLED().oledWord("Event Deleted");
-            delay(1000);
+            OLED().sysMessage("Event Deleted",1000);
             CurrentCalendarState = MONTH;
             newState = true;
           }
@@ -1137,8 +1135,7 @@ void processKB_CALENDAR() {
         else if (inchar == '!') { // 's' in FUNC layer
           updateEventByIndex(editingEventIndex);
           updateEventsFile();
-          OLED().oledWord("Event Saved");
-          delay(1000);
+          OLED().sysMessage("Event Saved",1000);
           CurrentCalendarState = MONTH;
           newState = true;
         }

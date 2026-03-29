@@ -68,8 +68,7 @@ void updateTasksFile() {
     }
   } else {
     ESP_LOGE(TAG, "Failed to write to temporary tasks file.");
-    OLED().oledWord("SAVE FAILED!");
-    delay(1000); 
+    OLED().sysMessage("SAVE FAILED!",1000);
   }
 
   if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
@@ -221,7 +220,8 @@ void processKB_TASKS() {
         // Step 1: Text entry for task name
         KB().setKeyboardState(NORMAL);
         input = textPrompt("Enter Task Name:");
-        if (input != "_EXIT_") {
+        if (input == "_RETURN_") return;
+        else if (input != "_EXIT_") {
           newTaskName = input;
           newTaskState = 1;
         } else {
@@ -237,8 +237,7 @@ void processKB_TASKS() {
 
         // ADD NEW TASK
         addTask(newTaskName, newTaskDueDate, "0", "0");
-        OLED().oledWord("New Task Added");
-        delay(1000);
+        OLED().sysMessage("New Task Added",1000);
 
         // RETURN TO MAIN MENU
         newTaskState = 0;
@@ -268,7 +267,8 @@ void processKB_TASKS() {
               if (inchar == '1') {      // RENAME TASK
                 KB().setKeyboardState(NORMAL);
                 input = textPrompt("Enter a new task name:");
-                if (input != "_EXIT_") {
+                if (input == "_RETURN_") return;
+                else if (input != "_EXIT_") {
                   OLED().oledWord("updating task...");
                   tasks[selectedTask][0] = input;
                   updateTasksFile();

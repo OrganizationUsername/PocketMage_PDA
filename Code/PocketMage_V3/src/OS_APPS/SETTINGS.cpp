@@ -244,11 +244,11 @@ void processKB_settings() {
   switch (CurrentSettingsState) {
     case SETTINGS_MAIN:
       command = textPrompt();
-      if (command != "_EXIT_") {
+      if (command == "_RETURN_") return;
+      else if (command != "_EXIT_") {
         returnText = settingCommandSelect(command);
         if (returnText != "") {
-          OLED().oledWord(returnText);
-          delay(1000);
+          OLED().sysMessage(returnText,1000);
         }
       }
       else HOME_INIT();

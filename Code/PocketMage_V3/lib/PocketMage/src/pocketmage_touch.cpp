@@ -13,8 +13,7 @@ void setupTouch(){
   // MPR121 / SLIDER
   if (!cap.begin(MPR121_ADDR)) {
     ESP_LOGE(TAG, "TouchPad Failed");
-    OLED().oledWord("TouchPad Failed");
-    delay(1000);
+    OLED().sysMessage("Touchpad Failed",1000);
   }
   cap.setAutoconfig(true);
 }

@@ -447,7 +447,8 @@ void processKB_FILEWIZ() {
           if (inchar == '1') { 
             KB().setKeyboardState(NORMAL);
             String input = textPrompt("Enter new filename:");
-            if (input != "_EXIT_" && input != "") {
+            if (input == "_RETURN_") return;
+            else if (input != "_EXIT_" && input != "") {
               OLED().oledWord("Renaming...");
               
               String newName = dirPath + input + extension; 
@@ -474,7 +475,8 @@ void processKB_FILEWIZ() {
           else if (inchar == '3') { 
             KB().setKeyboardState(NORMAL);
             String input = textPrompt("Enter copy name:");
-            if (input != "_EXIT_" && input != "") {
+            if (input == "_RETURN_") return;
+            else if (input != "_EXIT_" && input != "") {
               OLED().oledWord("Copying...");
               
               String newName = dirPath + input + extension;
@@ -495,8 +497,7 @@ void processKB_FILEWIZ() {
               String info = "Size: " + String(fSize) + " Bytes.";
               waitForKeypress(info);
             } else {
-              OLED().oledWord("Error reading file.");
-              delay(1500);
+              OLED().sysMessage("Error reading file",1500);
             }
             KB().setKeyboardState(FUNC); 
           }
