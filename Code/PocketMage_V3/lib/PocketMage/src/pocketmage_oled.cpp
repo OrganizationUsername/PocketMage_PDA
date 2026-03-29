@@ -95,31 +95,31 @@ void PocketmageOled::sysMessage(String msg, int showTime) {
 
   // --- 1. Find the largest font that fits and calculate offsets ---
   u8g2_.setFont(u8g2_font_ncenB14_tf);
-  if (u8g2_.getUTF8Width(msg.c_str()) < dw) {
-    y_offset = 16 + 3;
+  if (u8g2_.getUTF8Width(msg.c_str()) < dw-8) {
+    y_offset = 16 + 3 + 5;
     x_offset = (dw - u8g2_.getUTF8Width(msg.c_str())) / 2;
   } 
   else {
     u8g2_.setFont(u8g2_font_ncenB12_tf);
-    if (u8g2_.getUTF8Width(msg.c_str()) < dw) {
-      y_offset = 16 + 2;
+    if (u8g2_.getUTF8Width(msg.c_str()) < dw-8) {
+      y_offset = 16 + 2 + 5;
       x_offset = (dw - u8g2_.getUTF8Width(msg.c_str())) / 2;
     } 
     else {
       u8g2_.setFont(u8g2_font_ncenB10_tf);
-      if (u8g2_.getUTF8Width(msg.c_str()) < dw) {
-        y_offset = 16 + 1;
+      if (u8g2_.getUTF8Width(msg.c_str()) < dw-8) {
+        y_offset = 16 + 1 + 5;
         x_offset = (dw - u8g2_.getUTF8Width(msg.c_str())) / 2;
       } 
       else {
         u8g2_.setFont(u8g2_font_ncenB08_tf);
-        if (u8g2_.getUTF8Width(msg.c_str()) < dw) {
-          y_offset = 16;
+        if (u8g2_.getUTF8Width(msg.c_str()) < dw-8) {
+          y_offset = 16 + 5;
           x_offset = (dw - u8g2_.getUTF8Width(msg.c_str())) / 2;
         } 
         else {
           // Fallback: If it's still too long, align it to the right edge
-          y_offset = 16;
+          y_offset = 16 + 5;
           x_offset = dw - u8g2_.getUTF8Width(msg.c_str());
         }
       }
@@ -139,7 +139,7 @@ void PocketmageOled::sysMessage(String msg, int showTime) {
   vTaskDelay(pdMS_TO_TICKS(showTime));
 
   // --- 4. Lower message animation ---
-  for (int y = 0; y < dh; y+=2) {
+  for (int y = 0; y <= dh; y+=2) {
     u8g2_.clearBuffer();
     u8g2_.drawUTF8(x_offset, y + y_offset, msg.c_str());
     u8g2_.drawRFrame(0, y, dw, dh + 16, 10);
